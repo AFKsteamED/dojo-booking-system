@@ -4,9 +4,8 @@ import type { Member, CreditWallet, SessionWithCounts } from "@/lib/types";
 async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw Object.assign(new Error(data.error ?? "REQUEST_FAILED"), {
-      code: data.error,
-    });
+    const msg = data.reason ? `${data.error}（${data.reason}）` : data.error ?? "REQUEST_FAILED";
+    throw Object.assign(new Error(msg), { code: data.error });
   }
   return data;
 }

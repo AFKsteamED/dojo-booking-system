@@ -14,10 +14,14 @@ export async function POST(req: NextRequest) {
   let identity: { userId: string; name: string } | null = null;
 
   if (idToken) {
-    identity = await verifyLineIdToken(idToken);
-    if (!identity) {
-      return NextResponse.json({ error: "INVALID_ID_TOKEN" }, { status: 401 });
+    const result = await verifyLineIdToken(idToken);
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: "INVALID_ID_TOKEN", reason: result.reason },
+        { status: 401 }
+      );
     }
+    identity = result.identity;
   } else if (mock && process.env.NODE_ENV !== "production") {
     identity = { userId: "U_dev_mock_0001", name: "開發測試員" };
   } else {
