@@ -11,21 +11,20 @@ async function jsonOrThrow(res: Response) {
   return data;
 }
 
-export async function syncMember(lineUserId: string, displayName: string) {
+// 進站同步：真身分帶 idToken；開發假身分帶 mock:true
+export async function syncMember(input: { idToken: string | null }) {
   const res = await fetch("/api/members/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lineUserId, displayName }),
+    body: JSON.stringify(
+      input.idToken ? { idToken: input.idToken } : { mock: true }
+    ),
   });
   return jsonOrThrow(res) as Promise<{ member: Member; profileComplete: boolean }>;
 }
 
-export async function updateProfile(input: {
-  lineUserId: string;
-  display_name: string;
-  phone: string;
-  email: string;
-}) {
+// 只送可編輯欄位（姓名鎖定 LINE、電話首次填後鎖定，都由後端把關）
+export async function updateProfile(input: { phone: string; email: string }) {
   const res = await fetch("/api/members/me", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -40,8 +39,8 @@ export async function getSessions(from: string, to: string) {
   return data.sessions as SessionWithCounts[];
 }
 
-export async function getSessionDetail(id: string, lineUserId: string) {
-  const res = await fetch(`/api/sessions/${id}?lineUserId=${encodeURIComponent(lineUserId)}`);
+export async function getSessionDetail(id: string) {
+  const res = await fetch(`/api/sessions/${id}`);
   return jsonOrThrow(res) as Promise<{
     session: SessionWithCounts;
     roster: string[];
@@ -50,20 +49,19 @@ export async function getSessionDetail(id: string, lineUserId: string) {
   }>;
 }
 
-export async function createBooking(lineUserId: string, sessionId: string) {
+export async function createBooking(sessionId: string) {
   const res = await fetch("/api/bookings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lineUserId, sessionId }),
+    body: JSON.stringify({ sessionId }),
   });
   return jsonOrThrow(res) as Promise<{ bookingId: string }>;
 }
 
-export async function cancelBooking(lineUserId: string, bookingId: string) {
+export async function cancelBooking(bookingId: string) {
   const res = await fetch(`/api/bookings/${bookingId}/cancel`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lineUserId }),
   });
   return jsonOrThrow(res);
 }
@@ -79,16 +77,14 @@ export type MyBooking = {
   startMs: number;
 };
 
-export async function getMyBookings(lineUserId: string, scope: "upcoming" | "past") {
-  const res = await fetch(
-    `/api/bookings?lineUserId=${encodeURIComponent(lineUserId)}&scope=${scope}`
-  );
+export async function getMyBookings(scope: "upcoming" | "past") {
+  const res = await fetch(`/api/bookings?scope=${scope}`);
   const data = await jsonOrThrow(res);
   return data.bookings as MyBooking[];
 }
 
-export async function getCredits(lineUserId: string) {
-  const res = await fetch(`/api/credits?lineUserId=${encodeURIComponent(lineUserId)}`);
+export async function getCredits() {
+  const res = await fetch(`/api/credits`);
   return jsonOrThrow(res) as Promise<{
     available: CreditWallet[];
     expired: CreditWallet[];

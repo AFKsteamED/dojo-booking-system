@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
-import { getMemberByLineId } from "@/lib/server-db";
+import { getSessionMember } from "@/lib/server-db";
 import { relOne } from "@/lib/rel";
 
 // 課程詳情：場次資訊 + 目前預約名單 + 我是否已預約 + 我的可用堂數
-// 用法：/api/sessions/<id>?lineUserId=Uxxx
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { searchParams } = new URL(req.url);
-  const lineUserId = searchParams.get("lineUserId");
-
   const supa = getServiceSupabase();
   const { data: session, error } = await supa
     .from("class_sessions")
@@ -38,8 +34,8 @@ export async function GET(
   // 我的狀態
   let myBooked = false;
   let myCredits = 0;
-  if (lineUserId) {
-    const member = await getMemberByLineId(lineUserId);
+  {
+    const member = await getSessionMember();
     if (member) {
       const { data: mine } = await supa
         .from("bookings")

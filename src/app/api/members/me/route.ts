@@ -1,28 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
-import { getMemberByLineId, isProfileComplete } from "@/lib/server-db";
+import { getSessionMember, isProfileComplete } from "@/lib/server-db";
 
-// 更新個人檔案（姓名 / 電話 / Email）
+// 更新個人檔案。
+// - 姓名：鎖定為 LINE 名稱，不接受前端修改。
+// - 電話：首次填一次；已有電話後就不可自行修改（只有後台能改）。
+// - Email：可自由編輯。
 export async function PATCH(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  const { lineUserId, display_name, phone, email } = body;
-  if (!lineUserId) {
-    return NextResponse.json({ error: "MISSING_USER" }, { status: 400 });
-  }
-  const member = await getMemberByLineId(lineUserId);
+  const member = await getSessionMember();
   if (!member) {
-    return NextResponse.json({ error: "MEMBER_NOT_FOUND" }, { status: 404 });
+    return NextResponse.json({ error: "MEMBER_NOT_FOUND" }, { status: 401 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const { phone, email } = body;
+
+  const update: Record<string, unknown> = {
+    email: (email ?? "").trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  // 電話：僅在目前尚未設定時允許寫入（enter-once）
+  const phoneClean = (phone ?? "").trim();
+  if (!member.phone && phoneClean) {
+    update.phone = phoneClean;
   }
 
   const supa = getServiceSupabase();
   const { data, error } = await supa
     .from("members")
-    .update({
-      display_name: (display_name ?? "").trim(),
-      phone: (phone ?? "").trim() || null,
-      email: (email ?? "").trim() || null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq("id", member.id)
     .select()
     .single();

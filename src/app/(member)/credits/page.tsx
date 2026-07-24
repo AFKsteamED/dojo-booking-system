@@ -15,7 +15,7 @@ export default function CreditsPage() {
 
   useEffect(() => {
     if (!profile) return;
-    getCredits(profile.userId)
+    getCredits()
       .then(setData)
       .catch(() => setData({ available: [], expired: [] }));
   }, [profile]);

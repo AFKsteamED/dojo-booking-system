@@ -15,6 +15,15 @@ export const adminApi = {
   async member(id: string) {
     return j(await fetch(`/api/admin/members/${id}`));
   },
+  async updateMember(id: string, body: { phone?: string; email?: string }) {
+    return j(
+      await fetch(`/api/admin/members/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    );
+  },
   async addCredits(id: string, body: Record<string, unknown>) {
     return j(
       await fetch(`/api/admin/members/${id}/credits`, {

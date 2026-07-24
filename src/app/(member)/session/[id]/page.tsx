@@ -28,20 +28,20 @@ export default function SessionDetailPage({
 
   const load = () => {
     if (!profile) return;
-    getSessionDetail(id, profile.userId).then(setData).catch(() => setData(null));
+    getSessionDetail(id).then(setData).catch(() => setData(null));
   };
   useEffect(load, [id, profile]);
 
   async function handleBook() {
     if (!profile) return;
     if (!profileComplete) {
-      setMsg("請先到「個人檔案」填寫姓名與電話");
+      setMsg("請先到「個人檔案」填寫電話");
       return;
     }
     setBusy(true);
     setMsg(null);
     try {
-      await createBooking(profile.userId, id);
+      await createBooking(id);
       setMsg("預約成功！");
       load();
     } catch (e) {

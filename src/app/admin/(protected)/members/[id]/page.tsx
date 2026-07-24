@@ -31,14 +31,30 @@ export default function AdminMemberDetail({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  // 後台改電話
+  const [phoneEdit, setPhoneEdit] = useState("");
+  const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
+
   const load = useCallback(() => {
     adminApi.member(id).then((d) => {
       setMember(d.member);
       setWallets(d.wallets);
       setBookings(d.bookings);
+      setPhoneEdit(d.member.phone ?? "");
     });
   }, [id]);
   useEffect(load, [load]);
+
+  async function savePhone() {
+    setPhoneMsg(null);
+    try {
+      await adminApi.updateMember(id, { phone: phoneEdit });
+      setPhoneMsg("已更新電話 ✓");
+      load();
+    } catch {
+      setPhoneMsg("更新失敗");
+    }
+  }
 
   async function addCredits() {
     setBusy(true);
@@ -67,10 +83,27 @@ export default function AdminMemberDetail({
     <div className="space-y-5">
       <button onClick={() => router.back()} className="text-sm text-gray-500">‹ 返回會員</button>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
         <p className="font-bold text-lg">{member.display_name || "（未填姓名）"}</p>
-        <p className="text-sm text-gray-500">{member.phone ?? "未填電話"}</p>
-        {member.email && <p className="text-sm text-gray-500">{member.email}</p>}
+        <div className="flex items-end gap-2">
+          <label className="flex-1">
+            <span className="text-xs text-gray-500">電話（只有後台能改）</span>
+            <input
+              value={phoneEdit}
+              onChange={(e) => setPhoneEdit(e.target.value)}
+              placeholder="未填電話"
+              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+            />
+          </label>
+          <button
+            onClick={savePhone}
+            className="text-sm bg-gray-800 text-white rounded-lg px-3 py-2"
+          >
+            儲存電話
+          </button>
+        </div>
+        {phoneMsg && <p className="text-xs text-brand">{phoneMsg}</p>}
+        {member.email && <p className="text-sm text-gray-500">Email：{member.email}</p>}
       </div>
 
       {/* 加堂數 */}

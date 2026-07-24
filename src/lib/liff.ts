@@ -29,6 +29,7 @@ const MOCK_PROFILE: LiffProfile = {
 export type LiffState = {
   profile: LiffProfile;
   isMock: boolean;
+  idToken: string | null; // 真身分時的 LINE ID Token（送給後端驗證）
 };
 
 /**
@@ -54,7 +55,7 @@ function shouldUseMock(): boolean {
 export async function initLiff(): Promise<LiffState> {
   // 開發模式（無 LIFF ID 或 localhost）→ 直接回假身分
   if (shouldUseMock() || !LIFF_ID) {
-    return { profile: MOCK_PROFILE, isMock: true };
+    return { profile: MOCK_PROFILE, isMock: true, idToken: null };
   }
 
   // 動態載入，避免在 server 端被打包
@@ -78,5 +79,6 @@ export async function initLiff(): Promise<LiffState> {
       statusMessage: p.statusMessage,
     },
     isMock: false,
+    idToken: liff.getIDToken(),
   };
 }

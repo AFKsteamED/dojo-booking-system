@@ -1,14 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
-import { getMemberByLineId } from "@/lib/server-db";
+import { getSessionMember } from "@/lib/server-db";
 
 // 我的堂數錢包（available 可使用 / expired 已失效）
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const lineUserId = searchParams.get("lineUserId");
-  if (!lineUserId) return NextResponse.json({ error: "MISSING_USER" }, { status: 400 });
-
-  const member = await getMemberByLineId(lineUserId);
+export async function GET() {
+  const member = await getSessionMember();
   if (!member) return NextResponse.json({ available: [], expired: [] });
 
   const supa = getServiceSupabase();

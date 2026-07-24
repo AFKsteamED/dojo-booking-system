@@ -1,13 +1,12 @@
 import "server-only";
 import { getServiceSupabase } from "@/lib/supabase";
+import { getSessionUserId } from "@/lib/member-session";
 import type { Member } from "@/lib/types";
 
 // 伺服器端共用資料存取。
 //
-// ⚠️ 身分信任說明（v1）：
-// 目前用戶端傳 lineUserId 過來，我們直接信任它。這在小型道館、低濫用風險下可接受，
-// 但正式對外前（M6 強化）應改為：用戶端送 liff.getIDToken()，伺服器向 LINE 驗證後
-// 取出真正的 userId。屆時只需改這一支檔案的取得身分邏輯即可。
+// 身分來源：會員身分一律來自「已驗證的 session cookie」（見 member-session.ts）。
+// cookie 是在 /api/members/sync 用 LINE ID Token 驗證通過後才簽發，因此可信任。
 
 /** 依 lineUserId 取得會員；沒有則回 null */
 export async function getMemberByLineId(
@@ -22,25 +21,40 @@ export async function getMemberByLineId(
   return (data as Member) ?? null;
 }
 
-/** 取得會員或建立（首次進站）。只在建立時寫入 LINE 暱稱，之後不覆蓋（讓個人檔案的姓名優先） */
+/** 取得目前登入（session cookie）的會員；未登入或找不到回 null */
+export async function getSessionMember(): Promise<Member | null> {
+  const userId = await getSessionUserId();
+  if (!userId) return null;
+  return getMemberByLineId(userId);
+}
+
+/**
+ * 取得會員或建立。姓名一律鎖定為 LINE 驗證後的顯示名稱（每次同步都更新），
+ * 確保後端姓名資料的真實性，且會員端無法自行竄改。
+ */
 export async function syncMember(input: {
   lineUserId: string;
-  displayName?: string;
+  displayName: string;
 }): Promise<Member> {
   const supa = getServiceSupabase();
   const existing = await getMemberByLineId(input.lineUserId);
   if (existing) {
-    await supa
+    const { data } = await supa
       .from("members")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", existing.id);
-    return existing;
+      .update({
+        display_name: input.displayName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .select()
+      .single();
+    return (data as Member) ?? existing;
   }
   const { data, error } = await supa
     .from("members")
     .insert({
       line_user_id: input.lineUserId,
-      display_name: input.displayName ?? "",
+      display_name: input.displayName,
     })
     .select()
     .single();

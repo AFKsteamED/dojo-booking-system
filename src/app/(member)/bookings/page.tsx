@@ -15,7 +15,7 @@ export default function BookingsPage() {
   const load = useCallback(() => {
     if (!profile) return;
     setList(null);
-    getMyBookings(profile.userId, scope)
+    getMyBookings(scope)
       .then(setList)
       .catch(() => setList([]));
   }, [profile, scope]);
@@ -27,7 +27,7 @@ export default function BookingsPage() {
     if (!confirm("確定要取消這筆預約嗎？")) return;
     setMsg(null);
     try {
-      await cancelBooking(profile.userId, id);
+      await cancelBooking(id);
       setMsg("已取消，堂數已退回");
       load();
     } catch (e) {

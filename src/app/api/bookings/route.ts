@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
-import { getMemberByLineId, isProfileComplete } from "@/lib/server-db";
+import { getSessionMember, isProfileComplete } from "@/lib/server-db";
 import { extractErrorCode } from "@/lib/booking-errors";
 import { relOne } from "@/lib/rel";
 
 // 取得我的預約清單（scope=upcoming 預約中 / past 已結束）
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const lineUserId = searchParams.get("lineUserId");
   const scope = searchParams.get("scope") ?? "upcoming";
-  if (!lineUserId) return NextResponse.json({ error: "MISSING_USER" }, { status: 400 });
 
-  const member = await getMemberByLineId(lineUserId);
+  const member = await getSessionMember();
   if (!member) return NextResponse.json({ bookings: [] });
 
   const supa = getServiceSupabase();
@@ -62,13 +60,13 @@ export async function GET(req: NextRequest) {
 // 建立預約（扣 1 堂）
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const { lineUserId, sessionId } = body;
-  if (!lineUserId || !sessionId) {
+  const { sessionId } = body;
+  if (!sessionId) {
     return NextResponse.json({ error: "MISSING_USER" }, { status: 400 });
   }
 
-  const member = await getMemberByLineId(lineUserId);
-  if (!member) return NextResponse.json({ error: "MEMBER_NOT_FOUND" }, { status: 404 });
+  const member = await getSessionMember();
+  if (!member) return NextResponse.json({ error: "MEMBER_NOT_FOUND" }, { status: 401 });
   if (!isProfileComplete(member)) {
     return NextResponse.json({ error: "PROFILE_INCOMPLETE" }, { status: 400 });
   }
