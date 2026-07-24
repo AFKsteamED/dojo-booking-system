@@ -1,26 +1,44 @@
 @import "tailwindcss";
 
+/*
+  真實格鬥 — 設計 token
+  參考 TNT/bookfast 的橘白風格。這是給 LINE 內開啟的行動網頁，固定亮色。
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fdf1ea;   /* 頁面淡橘背景 */
+  --surface: #ffffff;      /* 卡片白 */
+  --foreground: #1f2937;   /* 主文字 深灰 */
+  --muted: #9ca3af;        /* 次要文字 */
+  --brand: #ef6c2b;        /* 主橘（按鈕、重點） */
+  --brand-ink: #ffffff;    /* 橘底上的文字 */
+  --border: #f0e2d8;       /* 卡片/分隔線 */
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-border: var(--border);
+  /* 中文優先字型：目標裝置(LINE on iOS/Android)原生字型，免下載、渲染最好 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang TC",
+    "Noto Sans TC", "Microsoft JhengHei", "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 隱藏橫向捲軸（日期選擇列用） */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
