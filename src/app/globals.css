@@ -1,17 +1,22 @@
 @import "tailwindcss";
 
 /*
-  真實格鬥 — 設計 token
-  參考 TNT/bookfast 的橘白風格。這是給 LINE 內開啟的行動網頁，固定亮色。
+  真實格鬥 — 設計系統
+  品牌色取自道館 Logo：藍為主、紅為銳利點綴、黑字、乾淨冷色底。
+  這是給 LINE 內開啟的行動網頁，固定亮色。
 */
 :root {
-  --background: #fdf1ea;   /* 頁面淡橘背景 */
-  --surface: #ffffff;      /* 卡片白 */
-  --foreground: #1f2937;   /* 主文字 深灰 */
-  --muted: #9ca3af;        /* 次要文字 */
-  --brand: #ef6c2b;        /* 主橘（按鈕、重點） */
-  --brand-ink: #ffffff;    /* 橘底上的文字 */
-  --border: #f0e2d8;       /* 卡片/分隔線 */
+  --background: #eef2f8; /* 冷色淺底 */
+  --surface: #ffffff; /* 卡片白 */
+  --foreground: #14181f; /* 主文字 近黑 */
+  --muted: #6b7688; /* 次要文字 冷灰 */
+  --brand: #1546a5; /* 主色 藍 */
+  --brand-strong: #103a8a; /* 主色加深（hover/按壓） */
+  --brand-ink: #ffffff; /* 藍底上的文字 */
+  --accent: #c81419; /* 裝飾色 紅 */
+  --accent-strong: #a51115;
+  --border: #e0e6f0; /* 分隔線 */
+  --ring: rgba(21, 70, 165, 0.35);
 }
 
 @theme inline {
@@ -20,18 +25,65 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
   --color-brand-ink: var(--brand-ink);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-border: var(--border);
   /* 中文優先字型：目標裝置(LINE on iOS/Android)原生字型，免下載、渲染最好 */
   --font-sans: -apple-system, BlinkMacSystemFont, "PingFang TC",
     "Noto Sans TC", "Microsoft JhengHei", "Helvetica Neue", Arial, sans-serif;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background: var(--background);
+  /* 冷色底加一層極淡的縱向漸層，避免大面積死平 */
+  background:
+    radial-gradient(140% 60% at 50% 0%, #f4f7fc 0%, var(--background) 55%)
+      fixed,
+    var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 標題：緊排、平衡斷行，讓字更有份量 */
+h1 {
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* 全站互動回饋：平滑過渡 + 按壓下沉 + 鍵盤聚焦環 */
+button,
+a,
+input,
+[role="button"] {
+  transition:
+    transform 0.14s ease,
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+button:active,
+[role="button"]:active {
+  transform: translateY(1px);
+}
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 藍色調的柔和卡片陰影（取代死黑陰影） */
+.shadow-card {
+  box-shadow:
+    0 1px 2px rgba(20, 32, 66, 0.05),
+    0 6px 20px -8px rgba(21, 70, 165, 0.18);
 }
 
 /* 隱藏橫向捲軸（日期選擇列用） */

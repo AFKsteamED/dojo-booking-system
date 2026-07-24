@@ -100,7 +100,7 @@ export default function ProfilePage() {
         <button
           onClick={handleSave}
           disabled={busy}
-          className="w-full rounded-2xl bg-brand text-brand-ink py-4 font-bold disabled:opacity-50"
+          className="w-full rounded-2xl bg-brand text-brand-ink py-4 font-bold shadow-card hover:bg-brand-strong disabled:opacity-50 disabled:hover:bg-brand"
         >
           {busy ? "儲存中…" : "儲存"}
         </button>

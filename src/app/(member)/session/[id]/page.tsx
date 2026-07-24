@@ -105,7 +105,7 @@ export default function SessionDetailPage({
           <button
             disabled={busy || s.remaining <= 0}
             onClick={handleBook}
-            className="w-full rounded-2xl bg-brand text-brand-ink py-4 font-bold disabled:opacity-50"
+            className="w-full rounded-2xl bg-brand text-brand-ink py-4 font-bold shadow-card hover:bg-brand-strong disabled:opacity-50 disabled:hover:bg-brand"
           >
             {s.remaining <= 0 ? "已額滿" : busy ? "處理中…" : "立即預約（扣 1 堂）"}
           </button>

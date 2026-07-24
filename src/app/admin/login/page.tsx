@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Wordmark } from "@/components/wordmark";
 
 export default function AdminLogin() {
   const [pw, setPw] = useState("");
@@ -31,10 +32,10 @@ export default function AdminLogin() {
     <main className="flex-1 flex items-center justify-center px-6 bg-gray-50">
       <form
         onSubmit={submit}
-        className="bg-white border border-gray-200 rounded-2xl p-8 w-full max-w-sm shadow-sm"
+        className="bg-white border border-gray-200 rounded-2xl p-8 w-full max-w-sm shadow-card"
       >
-        <p className="text-brand font-extrabold tracking-widest text-xs">REAL FIGHTING</p>
-        <h1 className="text-xl font-bold mt-1">教練後台</h1>
+        <Wordmark className="text-[11px]" />
+        <h1 className="text-2xl font-extrabold mt-1">教練後台</h1>
         <p className="text-sm text-gray-400 mt-1 mb-6">請輸入管理密碼</p>
 
         <input
@@ -48,7 +49,7 @@ export default function AdminLogin() {
 
         <button
           disabled={busy}
-          className="mt-4 w-full rounded-xl bg-brand text-white py-3 font-bold disabled:opacity-50"
+          className="mt-4 w-full rounded-xl bg-brand text-white py-3 font-bold hover:bg-brand-strong disabled:opacity-50 disabled:hover:bg-brand"
         >
           {busy ? "登入中…" : "登入"}
         </button>
