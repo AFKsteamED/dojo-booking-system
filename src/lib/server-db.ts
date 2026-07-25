@@ -66,3 +66,30 @@ export async function syncMember(input: {
 export function isProfileComplete(m: Member | null): boolean {
   return !!(m && m.display_name?.trim() && m.phone?.trim());
 }
+
+/** 某會員可參與的私人課集合（範本層級 + 單堂層級） */
+export async function getEligibleSets(memberId?: string) {
+  const empty = { templateIds: new Set<string>(), sessionIds: new Set<string>() };
+  if (!memberId) return empty;
+  const supa = getServiceSupabase();
+  const [{ data: tm }, { data: sm }] = await Promise.all([
+    supa.from("template_members").select("template_id").eq("member_id", memberId),
+    supa.from("session_members").select("session_id").eq("member_id", memberId),
+  ]);
+  return {
+    templateIds: new Set((tm ?? []).map((r) => r.template_id as string)),
+    sessionIds: new Set((sm ?? []).map((r) => r.session_id as string)),
+  };
+}
+
+/** 這位會員能否看到/預約某私人場次 */
+export function canSeePrivate(
+  session: { visibility: string; template_id: string | null; id: string },
+  eligible: { templateIds: Set<string>; sessionIds: Set<string> }
+): boolean {
+  if (session.visibility !== "private") return true;
+  return (
+    (!!session.template_id && eligible.templateIds.has(session.template_id)) ||
+    eligible.sessionIds.has(session.id)
+  );
+}

@@ -3,42 +3,30 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { adminApi } from "@/lib/admin-api";
-import { toDateStr, shortDateTW, hhmm } from "@/lib/date-utils";
+import { shortDateTW, hhmm } from "@/lib/date-utils";
 
 type AdminSession = {
   id: string;
   title: string;
+  session_date: string;
   start_time: string;
   end_time: string;
   capacity: number;
   status: string;
+  visibility: "public" | "private";
   coach_name: string | null;
   booked_count: number;
 };
 
 export default function AdminSchedulePage() {
-  const [date, setDate] = useState(toDateStr(new Date()));
   const [sessions, setSessions] = useState<AdminSession[] | null>(null);
-  const [genMsg, setGenMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [limit, setLimit] = useState(7);
 
   const load = useCallback(() => {
     setSessions(null);
-    adminApi.sessions(date).then((d) => setSessions(d.sessions)).catch(() => setSessions([]));
-  }, [date]);
+    adminApi.upcoming(limit).then((d) => setSessions(d.sessions)).catch(() => setSessions([]));
+  }, [limit]);
   useEffect(load, [load]);
-
-  async function generate() {
-    setBusy(true);
-    setGenMsg(null);
-    try {
-      await adminApi.generateSessions(8);
-      setGenMsg("已產生未來 8 週的常規課場次");
-      load();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function cancelSession(id: string) {
     if (!confirm("確定停課？已預約的學員會自動退還堂數。")) return;
@@ -49,32 +37,27 @@ export default function AdminSchedulePage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">課表 / 名單</h1>
-        <button
-          onClick={generate}
-          disabled={busy}
-          className="text-sm bg-brand text-white rounded-lg px-3 py-2 disabled:opacity-50"
-        >
-          產生未來 8 週場次
-        </button>
-      </div>
-      {genMsg && <p className="text-sm text-green-600 bg-green-50 rounded-lg px-3 py-2">{genMsg}</p>}
-
-      <div className="flex items-center gap-2">
-        <label className="text-sm text-gray-500">日期</label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
-        />
-        <span className="text-sm text-gray-400">{shortDateTW(date)}</span>
+        <h1 className="text-lg font-bold">近期課程</h1>
+        <div className="flex gap-2">
+          <Link
+            href="/admin/courses"
+            className="text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-2"
+          >
+            常態課／名單
+          </Link>
+          <Link
+            href="/admin/courses/new"
+            className="text-sm bg-brand text-white rounded-lg px-3 py-2 hover:bg-brand-strong"
+          >
+            ＋ 新增課程
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-3">
         {sessions === null && <p className="text-gray-400 text-sm py-6 text-center">載入中…</p>}
         {sessions?.length === 0 && (
-          <p className="text-gray-400 text-sm py-6 text-center">這天沒有場次</p>
+          <p className="text-gray-400 text-sm py-6 text-center">近期沒有課程</p>
         )}
         {sessions?.map((s) => (
           <div
@@ -84,17 +67,14 @@ export default function AdminSchedulePage() {
             }`}
           >
             <div>
-              <p className="text-sm text-gray-500">
-                {hhmm(s.start_time)} – {hhmm(s.end_time)} · {s.coach_name ?? "教練"}
-              </p>
-              <p className="font-bold">
-                {s.title}
-                {s.status === "cancelled" && (
-                  <span className="ml-2 text-xs text-red-500">已停課</span>
-                )}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-gray-500">{shortDateTW(s.session_date)}</p>
+                <VisBadge v={s.visibility} />
+              </div>
+              <p className="font-bold mt-0.5">{s.title}</p>
               <p className="text-sm text-gray-500 mt-0.5">
-                預約 {s.booked_count} / {s.capacity} 人
+                {hhmm(s.start_time)} – {hhmm(s.end_time)} · {s.coach_name ?? "教練"} · 預約{" "}
+                {s.booked_count}/{s.capacity} 人
               </p>
             </div>
             <div className="flex flex-col gap-2 items-end">
@@ -105,10 +85,7 @@ export default function AdminSchedulePage() {
                 看名單
               </Link>
               {s.status !== "cancelled" && (
-                <button
-                  onClick={() => cancelSession(s.id)}
-                  className="text-xs text-red-500"
-                >
+                <button onClick={() => cancelSession(s.id)} className="text-xs text-accent">
                   停課
                 </button>
               )}
@@ -116,6 +93,23 @@ export default function AdminSchedulePage() {
           </div>
         ))}
       </div>
+
+      {sessions && sessions.length >= limit && (
+        <button
+          onClick={() => setLimit((n) => n + 7)}
+          className="w-full text-sm text-gray-500 border border-gray-200 rounded-lg py-2"
+        >
+          顯示更多
+        </button>
+      )}
     </div>
+  );
+}
+
+function VisBadge({ v }: { v: "public" | "private" }) {
+  return v === "private" ? (
+    <span className="text-[11px] bg-accent/10 text-accent rounded-full px-2 py-0.5">私人</span>
+  ) : (
+    <span className="text-[11px] bg-brand/10 text-brand rounded-full px-2 py-0.5">公開</span>
   );
 }

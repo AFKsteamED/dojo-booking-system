@@ -7,6 +7,7 @@ export const BOOKING_ERROR_MESSAGES: Record<string, string> = {
   SESSION_PAST: "這堂課已經開始或結束了",
   FULL: "這堂課名額已滿",
   NO_CREDITS: "剩餘堂數不足，或堂數不在有效期內",
+  NOT_ELIGIBLE: "你不在這堂私人課程的參與名單中",
   ALREADY_BOOKED: "你已經預約過這堂課了",
   BOOKING_NOT_FOUND: "找不到這筆預約",
   NOT_YOURS: "這不是你的預約",

@@ -36,6 +36,38 @@ export const adminApi = {
   async templates() {
     return j(await fetch(`/api/admin/templates`));
   },
+  async template(id: string) {
+    return j(await fetch(`/api/admin/templates/${id}`));
+  },
+  async addTemplateMember(id: string, member_id: string) {
+    return j(
+      await fetch(`/api/admin/templates/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id }),
+      })
+    );
+  },
+  async removeTemplateMember(id: string, member_id: string) {
+    return j(
+      await fetch(`/api/admin/templates/${id}?member_id=${member_id}`, { method: "DELETE" })
+    );
+  },
+  async coaches() {
+    return j(await fetch(`/api/admin/coaches`));
+  },
+  async createCourse(body: Record<string, unknown>) {
+    return j(
+      await fetch(`/api/admin/courses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    );
+  },
+  async upcoming(limit = 7) {
+    return j(await fetch(`/api/admin/sessions/upcoming?limit=${limit}`));
+  },
   async generateSessions(weeks: number) {
     return j(
       await fetch(`/api/admin/generate-sessions`, {

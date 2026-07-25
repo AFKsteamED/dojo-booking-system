@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
+import { getSessionMember, getEligibleSets, canSeePrivate } from "@/lib/server-db";
 import { relOne } from "@/lib/rel";
 
-// 取某段日期範圍的課程場次（含教練名、目前預約人數、剩餘名額）
+// 取某段日期範圍、「這位會員看得到」的課程場次。
+// 公開課所有人可見；私人課只有參與名單內的會員可見。
 // 用法：/api/sessions?from=2026-07-24&to=2026-07-31
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -26,10 +28,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const ids = (sessions ?? []).map((s) => s.id as string);
+  // 這位會員可參與的私人課（範本層級 + 單堂層級）
+  const member = await getSessionMember();
+  const eligible = await getEligibleSets(member?.id);
+
+  const visible = (sessions ?? []).filter((s) =>
+    canSeePrivate(
+      { visibility: s.visibility as string, template_id: s.template_id as string | null, id: s.id as string },
+      eligible
+    )
+  );
+
+  const ids = visible.map((s) => s.id as string);
   const counts = await countBookings(ids);
 
-  const result = (sessions ?? []).map((s) => {
+  const result = visible.map((s) => {
     const booked = counts[s.id as string] ?? 0;
     return {
       ...s,
@@ -42,7 +55,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ sessions: result });
 }
 
-// 計算每個場次目前的有效預約數
 async function countBookings(sessionIds: string[]): Promise<Record<string, number>> {
   if (sessionIds.length === 0) return {};
   const supa = getServiceSupabase();

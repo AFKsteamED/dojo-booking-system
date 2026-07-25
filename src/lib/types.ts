@@ -17,6 +17,8 @@ export type Coach = {
   active: boolean;
 };
 
+export type Visibility = "public" | "private";
+
 export type ClassSession = {
   id: string;
   template_id: string | null;
@@ -27,6 +29,7 @@ export type ClassSession = {
   end_time: string;
   capacity: number;
   status: "scheduled" | "cancelled";
+  visibility: Visibility;
 };
 
 export type CreditWallet = {

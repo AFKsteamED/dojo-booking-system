@@ -24,6 +24,7 @@ export default function AdminMemberDetail({
   const [bookings, setBookings] = useState<BookingRow[]>([]);
 
   // 加堂表單
+  const [walletType, setWalletType] = useState<"group" | "private">("group");
   const [credits, setCredits] = useState("10");
   const [validFrom, setValidFrom] = useState(toDateStr(new Date()));
   const [validTo, setValidTo] = useState(toDateStr(addDays(new Date(), 180)));
@@ -61,7 +62,7 @@ export default function AdminMemberDetail({
     setMsg(null);
     try {
       await adminApi.addCredits(id, {
-        type: "group",
+        type: walletType,
         credits: Number(credits),
         valid_from: validFrom,
         valid_to: validTo,
@@ -109,6 +110,27 @@ export default function AdminMemberDetail({
       {/* 加堂數 */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
         <p className="font-bold">手動加堂數</p>
+        <div>
+          <span className="text-xs text-gray-500">類型</span>
+          <div className="mt-1 flex gap-2">
+            <button
+              onClick={() => setWalletType("group")}
+              className={`flex-1 rounded-lg py-2 text-sm ${
+                walletType === "group" ? "bg-brand text-white" : "bg-white border border-gray-200 text-gray-600"
+              }`}
+            >
+              團體堂數
+            </button>
+            <button
+              onClick={() => setWalletType("private")}
+              className={`flex-1 rounded-lg py-2 text-sm ${
+                walletType === "private" ? "bg-accent text-white" : "bg-white border border-gray-200 text-gray-600"
+              }`}
+            >
+              私人堂數
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="堂數" value={credits} onChange={setCredits} type="number" />
           <Field label="備註" value={note} onChange={setNote} placeholder="例：現金購買" />

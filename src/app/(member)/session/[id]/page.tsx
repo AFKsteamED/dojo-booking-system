@@ -59,6 +59,11 @@ export default function SessionDetailPage({
       <header className="px-4 py-3 border-b border-border flex items-center gap-3">
         <button onClick={() => router.back()} className="text-muted text-xl">‹</button>
         <h1 className="font-bold">{s.title}</h1>
+        {s.visibility === "private" && (
+          <span className="text-[11px] bg-accent/10 text-accent rounded-full px-2 py-0.5">
+            私人課
+          </span>
+        )}
       </header>
 
       <div className="p-4 space-y-4">
@@ -87,7 +92,7 @@ export default function SessionDetailPage({
         </div>
 
         <p className="text-xs text-muted text-center">
-          我的可用堂數：{data.myCredits} 堂 · 預約將扣 1 堂
+          我的{s.visibility === "private" ? "私人" : "團體"}堂數：{data.myCredits} 堂 · 預約將扣 1 堂
         </p>
 
         {msg && (
