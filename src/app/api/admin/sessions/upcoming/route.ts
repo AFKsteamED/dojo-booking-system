@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { guardAdmin } from "@/lib/admin-auth";
 import { relOne } from "@/lib/rel";
-import { toDateStr } from "@/lib/date-utils";
+import { todayInTaipei } from "@/lib/date-utils";
 
 // 後台：接下來 N 堂課（含公開/私人、目前預約人數）
 export async function GET(req: NextRequest) {
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   const limit = Number(new URL(req.url).searchParams.get("limit") ?? "7");
-  const today = toDateStr(new Date());
+  const today = todayInTaipei();
 
   const supa = getServiceSupabase();
   const { data: sessions, error } = await supa

@@ -9,6 +9,18 @@ export function toDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// 以台北時區取得今天日期字串（YYYY-MM-DD）。
+// 伺服器在 Vercel 跑 UTC，直接用 new Date() 會在台灣清晨算成昨天，
+// 凡是「伺服器端」判斷今天都要用這個。
+export function todayInTaipei(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 export function addDays(d: Date, n: number): Date {
   const c = new Date(d);
   c.setDate(c.getDate() + n);

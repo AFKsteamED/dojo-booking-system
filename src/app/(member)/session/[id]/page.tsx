@@ -25,10 +25,25 @@ export default function SessionDetailPage({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = () => {
     if (!profile) return;
-    getSessionDetail(id).then(setData).catch(() => setData(null));
+    getSessionDetail(id)
+      .then((d) => {
+        setData(d);
+        setLoadError(null);
+      })
+      .catch((e) => {
+        const code = (e as { code?: string }).code;
+        setLoadError(
+          code === "NOT_ELIGIBLE"
+            ? "這是私人課程，你不在參與名單中"
+            : code === "SESSION_NOT_FOUND"
+              ? "找不到這堂課"
+              : "無法載入課程資訊"
+        );
+      });
   };
   useEffect(load, [id, profile]);
 
@@ -51,6 +66,19 @@ export default function SessionDetailPage({
     }
   }
 
+  if (loadError) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center gap-4">
+        <p className="text-sm text-muted">{loadError}</p>
+        <button
+          onClick={() => router.push("/")}
+          className="text-sm text-brand border border-brand/30 rounded-xl px-4 py-2"
+        >
+          回課表
+        </button>
+      </div>
+    );
+  }
   if (!data) return <p className="text-center text-muted text-sm py-16">載入中…</p>;
   const s = data.session;
 

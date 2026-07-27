@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { guardAdmin } from "@/lib/admin-auth";
+import { todayInTaipei } from "@/lib/date-utils";
 
 // 幫會員加一張堂數錢包（手動儲值）
 export async function POST(
@@ -30,7 +31,7 @@ export async function POST(
       type,
       total_credits: n,
       remaining_credits: n,
-      valid_from: valid_from || new Date().toISOString().slice(0, 10),
+      valid_from: valid_from || todayInTaipei(),
       valid_to,
       note: note || null,
     })

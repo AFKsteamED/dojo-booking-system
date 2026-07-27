@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { getSessionMember } from "@/lib/server-db";
+import { todayInTaipei } from "@/lib/date-utils";
 
 // 我的堂數錢包（available 可使用 / expired 已失效）
 export async function GET() {
@@ -16,7 +17,7 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInTaipei();
   const available = (data ?? []).filter(
     (w) => (w.valid_to as string) >= today && (w.remaining_credits as number) > 0
   );
