@@ -10,9 +10,13 @@ import { todayInTaipei, addDaysStr } from "@/lib/date-utils";
 //       或本機測試用 ?secret=<CRON_SECRET>。
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
+  // 沒設定密鑰 → 一律拒絕（fail-closed），避免端點裸奔
+  if (!secret) {
+    return NextResponse.json({ error: "CRON_SECRET_NOT_SET" }, { status: 503 });
+  }
   const auth = req.headers.get("authorization");
   const qs = new URL(req.url).searchParams.get("secret");
-  if (secret && auth !== `Bearer ${secret}` && qs !== secret) {
+  if (auth !== `Bearer ${secret}` && qs !== secret) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
