@@ -3,6 +3,8 @@ import { getServiceSupabase } from "@/lib/supabase";
 import { getSessionMember, isProfileComplete } from "@/lib/server-db";
 import { extractErrorCode } from "@/lib/booking-errors";
 import { relOne } from "@/lib/rel";
+import { pushText } from "@/lib/line-push";
+import { sessionBlock } from "@/lib/notify";
 
 // 取得我的預約清單（scope=upcoming 預約中 / past 已結束）
 export async function GET(req: NextRequest) {
@@ -81,5 +83,23 @@ export async function POST(req: NextRequest) {
     const code = extractErrorCode(error.message);
     return NextResponse.json({ error: code }, { status: 409 });
   }
+
+  // 推播預約確認（失敗不影響預約）
+  const { data: sess } = await supa
+    .from("class_sessions")
+    .select("title, session_date, start_time, end_time, coach:coaches(name)")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (sess) {
+    const block = sessionBlock({
+      title: sess.title as string,
+      session_date: sess.session_date as string,
+      start_time: sess.start_time as string,
+      end_time: sess.end_time as string,
+      coach_name: relOne<{ name: string }>(sess.coach)?.name ?? null,
+    });
+    await pushText(member.line_user_id, `✅ 預約成功\n\n${block}\n\n如需取消請於開課前 3 小時完成。`);
+  }
+
   return NextResponse.json({ bookingId: data });
 }

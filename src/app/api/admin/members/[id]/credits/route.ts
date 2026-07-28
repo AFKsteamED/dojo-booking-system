@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { guardAdmin } from "@/lib/admin-auth";
 import { todayInTaipei } from "@/lib/date-utils";
+import { pushText } from "@/lib/line-push";
 
 // 幫會員加一張堂數錢包（手動儲值）
 export async function POST(
@@ -39,5 +40,31 @@ export async function POST(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // 推播儲值成功給該會員（失敗不影響儲值）
+  const { data: member } = await supa
+    .from("members")
+    .select("line_user_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (member?.line_user_id) {
+    // 計算該類型目前可用總堂數
+    const { data: wallets } = await supa
+      .from("credit_wallets")
+      .select("remaining_credits")
+      .eq("member_id", id)
+      .eq("type", type)
+      .gte("valid_to", todayInTaipei());
+    const totalRemaining = (wallets ?? []).reduce(
+      (sum, w) => sum + (w.remaining_credits as number),
+      0
+    );
+    const typeLabel = type === "private" ? "私人課程" : "團體課程";
+    await pushText(
+      member.line_user_id,
+      `💳 堂數已儲值\n\n${typeLabel} ＋${n} 堂\n目前可用：${totalRemaining} 堂\n有效期至 ${valid_to}`
+    );
+  }
+
   return NextResponse.json({ wallet: data });
 }

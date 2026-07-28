@@ -27,6 +27,14 @@ export function addDays(d: Date, n: number): Date {
   return c;
 }
 
+// 對 YYYY-MM-DD 字串做加減天數（純日期運算，不受時區影響）
+export function addDaysStr(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+
 export function weekdayTW(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00+08:00`);
   return WEEKDAY_TW[d.getDay()];
