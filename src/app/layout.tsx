@@ -12,6 +12,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover", // 讓 env(safe-area-inset-*) 生效，避開手機底部橫杠
   themeColor: "#1546a5",
 };
 

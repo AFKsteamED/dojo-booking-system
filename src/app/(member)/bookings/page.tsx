@@ -56,6 +56,12 @@ export default function BookingsPage() {
         </p>
       )}
 
+      {scope === "upcoming" && (
+        <p className="mx-4 mb-2 text-[11px] text-muted text-center">
+          取消請於<span className="text-accent">開課前 3 小時</span>完成；逾時將無法取消、不退堂。
+        </p>
+      )}
+
       <div className="flex-1 px-4 space-y-3">
         {list === null && <p className="text-center text-muted text-sm py-10">載入中…</p>}
         {list?.length === 0 && (

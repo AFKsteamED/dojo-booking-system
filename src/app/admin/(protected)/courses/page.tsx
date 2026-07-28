@@ -57,12 +57,10 @@ export default function CoursesPage() {
                 {t.visibility === "private" && ` · 名單 ${t.member_count} 人`}
               </p>
             </div>
-            {t.visibility === "private" && (
-              <Link href={`/admin/courses/${t.id}`}
-                className="text-sm text-brand border border-brand/30 rounded-lg px-3 py-1.5">
-                管理名單
-              </Link>
-            )}
+            <Link href={`/admin/courses/${t.id}`}
+              className="text-sm text-brand border border-brand/30 rounded-lg px-3 py-1.5 shrink-0">
+              編輯{t.visibility === "private" ? "／名單" : ""}
+            </Link>
           </div>
         ))}
       </div>

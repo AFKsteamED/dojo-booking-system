@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { getSessionMember, getEligibleSets, canSeePrivate } from "@/lib/server-db";
 import { relOne } from "@/lib/rel";
+import { maskName } from "@/lib/mask";
 
 // 課程詳情：場次資訊 + 目前預約名單 + 我是否已預約 + 我的可用堂數
 export async function GET(
@@ -41,8 +42,9 @@ export async function GET(
     .eq("status", "booked")
     .order("created_at", { ascending: true });
 
-  const names = (roster ?? []).map(
-    (r) => relOne<{ display_name: string }>(r.member)?.display_name ?? "會員"
+  // 遮罩姓名保護隱私（後台看名單不受影響）
+  const names = (roster ?? []).map((r) =>
+    maskName(relOne<{ display_name: string }>(r.member)?.display_name ?? "會員")
   );
 
   // 我的狀態（可用堂數依課別：公開看團體堂數、私人看私人堂數）

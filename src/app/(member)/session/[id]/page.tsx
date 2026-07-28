@@ -82,6 +82,22 @@ export default function SessionDetailPage({
   if (!data) return <p className="text-center text-muted text-sm py-16">載入中…</p>;
   const s = data.session;
 
+  // 預約前先判斷能不能約，直接顯示原因（不用點了才失敗）
+  const startMs = new Date(`${s.session_date}T${s.start_time}+08:00`).getTime();
+  const isPast = startMs <= Date.now();
+  const creditLabel = s.visibility === "private" ? "私人" : "團體";
+  const blockReason = data.myBooked
+    ? null
+    : isPast
+      ? "已過預約時間"
+      : s.remaining <= 0
+        ? "已額滿"
+        : !profileComplete
+          ? "請先完成個人檔案（電話）"
+          : data.myCredits <= 0
+            ? `${creditLabel}堂數不足，請洽櫃檯儲值`
+            : null;
+
   return (
     <div className="flex-1 flex flex-col">
       <header className="px-4 py-3 border-b border-border flex items-center gap-3">
@@ -134,15 +150,22 @@ export default function SessionDetailPage({
           <div className="text-center text-sm text-muted">
             你已預約這堂課，若要取消請至「我的預約」
           </div>
+        ) : blockReason ? (
+          <div className="w-full rounded-2xl bg-gray-100 text-gray-400 py-4 font-bold text-center">
+            {blockReason}
+          </div>
         ) : (
           <button
-            disabled={busy || s.remaining <= 0}
+            disabled={busy}
             onClick={handleBook}
             className="w-full rounded-2xl bg-brand text-brand-ink py-4 font-bold shadow-card hover:bg-brand-strong disabled:opacity-50 disabled:hover:bg-brand"
           >
-            {s.remaining <= 0 ? "已額滿" : busy ? "處理中…" : "立即預約（扣 1 堂）"}
+            {busy ? "處理中…" : "立即預約（扣 1 堂）"}
           </button>
         )}
+        <p className="text-[11px] text-muted text-center mt-3">
+          預約後如需取消，請於<span className="text-accent">開課前 3 小時</span>完成；逾時將無法取消、不退堂。
+        </p>
       </div>
     </div>
   );

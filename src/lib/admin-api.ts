@@ -39,6 +39,24 @@ export const adminApi = {
   async template(id: string) {
     return j(await fetch(`/api/admin/templates/${id}`));
   },
+  async updateTemplate(id: string, body: Record<string, unknown>) {
+    return j(
+      await fetch(`/api/admin/templates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    );
+  },
+  async deactivateTemplate(id: string) {
+    return j(
+      await fetch(`/api/admin/templates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: false }),
+      })
+    );
+  },
   async addTemplateMember(id: string, member_id: string) {
     return j(
       await fetch(`/api/admin/templates/${id}`, {
