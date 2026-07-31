@@ -74,6 +74,27 @@ export const adminApi = {
   async coaches() {
     return j(await fetch(`/api/admin/coaches`));
   },
+  async coachesAll() {
+    return j(await fetch(`/api/admin/coaches?all=1`));
+  },
+  async createCoach(name: string) {
+    return j(
+      await fetch(`/api/admin/coaches`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      })
+    );
+  },
+  async updateCoach(id: string, body: { name?: string; active?: boolean }) {
+    return j(
+      await fetch(`/api/admin/coaches/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    );
+  },
   async createCourse(body: Record<string, unknown>) {
     return j(
       await fetch(`/api/admin/courses`, {

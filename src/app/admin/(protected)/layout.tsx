@@ -24,6 +24,9 @@ export default async function ProtectedAdminLayout({
               <Link href="/admin/members" className="text-gray-600 hover:text-brand">
                 會員 / 堂數
               </Link>
+              <Link href="/admin/coaches" className="text-gray-600 hover:text-brand">
+                教練
+              </Link>
             </nav>
           </div>
           <AdminLogout />
