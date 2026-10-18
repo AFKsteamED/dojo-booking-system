@@ -1,12 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
-import { getSessionMember } from "@/lib/server-db";
+import { getSessionMember, getActingMember } from "@/lib/server-db";
 import { todayInTaipei } from "@/lib/date-utils";
 
-// 我的堂數錢包（available 可使用 / expired 已失效）
-export async function GET() {
-  const member = await getSessionMember();
-  if (!member) return NextResponse.json({ available: [], expired: [] });
+// 某位家庭成員的堂數錢包（available 可使用 / expired 已失效）
+// ?memberId= 省略時看自己；可傳自己小孩的 id 查小孩的堂數
+export async function GET(req: NextRequest) {
+  const session = await getSessionMember();
+  if (!session) return NextResponse.json({ available: [], expired: [] });
+
+  const memberIdParam = new URL(req.url).searchParams.get("memberId");
+  const member = await getActingMember(session, memberIdParam);
+  if (!member) return NextResponse.json({ error: "NOT_YOUR_FAMILY" }, { status: 403 });
 
   const supa = getServiceSupabase();
   const { data, error } = await supa

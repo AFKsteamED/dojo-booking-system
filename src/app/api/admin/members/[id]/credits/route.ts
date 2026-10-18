@@ -3,8 +3,9 @@ import { getServiceSupabase } from "@/lib/supabase";
 import { guardAdmin } from "@/lib/admin-auth";
 import { todayInTaipei } from "@/lib/date-utils";
 import { pushText } from "@/lib/line-push";
+import { t, type Locale } from "@/lib/i18n";
 
-// 幫會員加一張堂數錢包（手動儲值）
+// 幫會員（或某會員的小孩）加一張堂數錢包（手動儲值）
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -41,29 +42,52 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // 推播儲值成功給該會員（失敗不影響儲值）
+  // 推播儲值成功（失敗不影響儲值）。
+  // 小孩（受扶養人）沒有 LINE，改通知家長，並在訊息中註明是幫誰儲值。
   const { data: member } = await supa
     .from("members")
-    .select("line_user_id")
+    .select("line_user_id, display_name, guardian_id, locale")
     .eq("id", id)
     .maybeSingle();
-  if (member?.line_user_id) {
-    // 計算該類型目前可用總堂數
-    const { data: wallets } = await supa
-      .from("credit_wallets")
-      .select("remaining_credits")
-      .eq("member_id", id)
-      .eq("type", type)
-      .gte("valid_to", todayInTaipei());
-    const totalRemaining = (wallets ?? []).reduce(
-      (sum, w) => sum + (w.remaining_credits as number),
-      0
-    );
-    const typeLabel = type === "private" ? "私人課程" : "團體課程";
-    await pushText(
-      member.line_user_id,
-      `💳 堂數已儲值\n\n${typeLabel} ＋${n} 堂\n目前可用：${totalRemaining} 堂\n有效期至 ${valid_to}`
-    );
+
+  if (member) {
+    let notifyLineId = member.line_user_id as string | null;
+    let notifyLocale = (member.locale as Locale) ?? "zh";
+    let forSuffix = "";
+    if (!notifyLineId && member.guardian_id) {
+      const { data: guardian } = await supa
+        .from("members")
+        .select("line_user_id, locale")
+        .eq("id", member.guardian_id)
+        .maybeSingle();
+      if (guardian?.line_user_id) {
+        notifyLineId = guardian.line_user_id as string;
+        notifyLocale = (guardian.locale as Locale) ?? "zh";
+        forSuffix = t(notifyLocale, "notify_for", { name: member.display_name as string });
+      }
+    }
+
+    if (notifyLineId) {
+      const { data: wallets } = await supa
+        .from("credit_wallets")
+        .select("remaining_credits")
+        .eq("member_id", id)
+        .eq("type", type)
+        .gte("valid_to", todayInTaipei());
+      const totalRemaining = (wallets ?? []).reduce(
+        (sum, w) => sum + (w.remaining_credits as number),
+        0
+      );
+      const typeLabel = t(notifyLocale, type === "private" ? "notify_creditPrivate" : "notify_creditGroup");
+      const text = [
+        `${t(notifyLocale, "notify_creditTopUp")}${forSuffix}`,
+        "",
+        `${typeLabel} ${t(notifyLocale, "notify_creditAdded", { n })}`,
+        t(notifyLocale, "notify_creditAvailable", { n: totalRemaining }),
+        t(notifyLocale, "notify_creditValidUntil", { date: valid_to }),
+      ].join("\n");
+      await pushText(notifyLineId, text);
+    }
   }
 
   return NextResponse.json({ wallet: data });

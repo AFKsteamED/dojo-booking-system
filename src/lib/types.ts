@@ -1,11 +1,22 @@
 // 全系統共用的資料型別（對應 db/01_schema.sql）
 
+export type Locale = "zh" | "en";
+export type Gender = "male" | "female" | "undisclosed";
+
 export type Member = {
   id: string;
-  line_user_id: string;
-  display_name: string;
+  line_user_id: string | null; // 小孩（受扶養人）沒有自己的 LINE，此欄位為 null
+  line_display_name: string | null; // LINE 暱稱（例：Apple），只給教練對照用
+  display_name: string; // 真實姓名（註冊時填寫，之後鎖定）
   phone: string | null;
   email: string | null;
+  gender: Gender | null;
+  birthday: string | null; // YYYY-MM-DD
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  registered_at: string | null; // 完成註冊時間；非 null 代表姓名已鎖定
+  locale: Locale;
+  guardian_id: string | null; // 非 null = 這是某位家長底下的小孩
   created_at: string;
   updated_at: string;
 };

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
-import { getSessionMember, getEligibleSets, canSeePrivate } from "@/lib/server-db";
+import { getSessionMember, getDependents, getEligibleSetsUnion, canSeePrivate } from "@/lib/server-db";
 import { relOne } from "@/lib/rel";
 
 // 取某段日期範圍、「這位會員看得到」的課程場次。
@@ -28,9 +28,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // 這位會員可參與的私人課（範本層級 + 單堂層級）
+  // 這個家庭（本人 + 小孩）可參與的私人課聯集（範本層級 + 單堂層級）
+  // 這樣家長不用切換身份，就能在課表上看到小孩才有資格的私人課
   const member = await getSessionMember();
-  const eligible = await getEligibleSets(member?.id);
+  const household = member ? [member.id, ...(await getDependents(member.id)).map((d) => d.id)] : [];
+  const eligible = await getEligibleSetsUnion(household);
 
   const visible = (sessions ?? []).filter((s) =>
     canSeePrivate(

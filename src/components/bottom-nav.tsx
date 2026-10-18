@@ -2,16 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useLiff } from "@/components/liff-provider";
+import type { DictKey } from "@/lib/i18n";
 
-const TABS = [
-  { href: "/", label: "課表", icon: CalendarIcon },
-  { href: "/bookings", label: "我的預約", icon: ListIcon },
-  { href: "/credits", label: "剩餘堂數", icon: WalletIcon },
-  { href: "/profile", label: "個人檔案", icon: UserIcon },
+const TABS: { href: string; key: DictKey; icon: typeof CalendarIcon }[] = [
+  { href: "/", key: "nav_schedule", icon: CalendarIcon },
+  { href: "/bookings", key: "nav_bookings", icon: ListIcon },
+  { href: "/credits", key: "nav_credits", icon: WalletIcon },
+  { href: "/profile", key: "nav_profile", icon: UserIcon },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { t, profileComplete } = useLiff();
+  if (!profileComplete) return null; // 註冊完成前不顯示導覽
   return (
     <nav
       className="sticky bottom-0 z-10 bg-surface border-t border-border"
@@ -19,7 +23,7 @@ export function BottomNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="mx-auto max-w-md grid grid-cols-4">
-        {TABS.map(({ href, label, icon: Icon }) => {
+        {TABS.map(({ href, key, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <Link
@@ -30,7 +34,7 @@ export function BottomNav() {
               }`}
             >
               <Icon />
-              <span>{label}</span>
+              <span>{t(key)}</span>
             </Link>
           );
         })}

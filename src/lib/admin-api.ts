@@ -15,7 +15,18 @@ export const adminApi = {
   async member(id: string) {
     return j(await fetch(`/api/admin/members/${id}`));
   },
-  async updateMember(id: string, body: { phone?: string; email?: string }) {
+  async updateMember(
+    id: string,
+    body: {
+      display_name?: string;
+      phone?: string;
+      email?: string;
+      gender?: string | null;
+      birthday?: string | null;
+      emergency_contact_name?: string;
+      emergency_contact_phone?: string;
+    }
+  ) {
     return j(
       await fetch(`/api/admin/members/${id}`, {
         method: "PATCH",

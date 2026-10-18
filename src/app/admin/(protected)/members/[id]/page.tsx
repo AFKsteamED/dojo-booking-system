@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { adminApi } from "@/lib/admin-api";
 import { toDateStr, addDays, shortDateTW, hhmm } from "@/lib/date-utils";
 import type { Member, CreditWallet } from "@/lib/types";
@@ -22,6 +23,8 @@ export default function AdminMemberDetail({
   const [member, setMember] = useState<Member | null>(null);
   const [wallets, setWallets] = useState<CreditWallet[]>([]);
   const [bookings, setBookings] = useState<BookingRow[]>([]);
+  const [guardian, setGuardian] = useState<{ id: string; display_name: string } | null>(null);
+  const [kids, setKids] = useState<{ id: string; display_name: string; phone: string | null }[]>([]);
 
   // 加堂表單
   const [walletType, setWalletType] = useState<"group" | "private">("group");
@@ -32,28 +35,51 @@ export default function AdminMemberDetail({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // 後台改電話
-  const [phoneEdit, setPhoneEdit] = useState("");
-  const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
+  // 後台編輯基本資料（姓名、電話等學員端鎖定的欄位只有這裡能改）
+  const [form, setForm] = useState({
+    display_name: "",
+    phone: "",
+    email: "",
+    gender: "",
+    birthday: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
+  });
+  const [profileMsg, setProfileMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     adminApi.member(id).then((d) => {
-      setMember(d.member);
+      const m: Member = d.member;
+      setMember(m);
       setWallets(d.wallets);
       setBookings(d.bookings);
-      setPhoneEdit(d.member.phone ?? "");
+      setGuardian(d.guardian ?? null);
+      setKids(d.dependents ?? []);
+      setForm({
+        display_name: m.display_name ?? "",
+        phone: m.phone ?? "",
+        email: m.email ?? "",
+        gender: m.gender ?? "",
+        birthday: m.birthday ?? "",
+        emergency_contact_name: m.emergency_contact_name ?? "",
+        emergency_contact_phone: m.emergency_contact_phone ?? "",
+      });
     });
   }, [id]);
   useEffect(load, [load]);
 
-  async function savePhone() {
-    setPhoneMsg(null);
+  async function saveProfile() {
+    setProfileMsg(null);
     try {
-      await adminApi.updateMember(id, { phone: phoneEdit });
-      setPhoneMsg("已更新電話 ✓");
+      await adminApi.updateMember(id, {
+        ...form,
+        gender: form.gender || null,
+        birthday: form.birthday || null,
+      });
+      setProfileMsg("已更新 ✓");
       load();
     } catch {
-      setPhoneMsg("更新失敗");
+      setProfileMsg("更新失敗，請檢查欄位");
     }
   }
 
@@ -85,26 +111,79 @@ export default function AdminMemberDetail({
       <button onClick={() => router.back()} className="text-sm text-gray-500">‹ 返回會員</button>
 
       <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-        <p className="font-bold text-lg">{member.display_name || "（未填姓名）"}</p>
-        <div className="flex items-end gap-2">
-          <label className="flex-1">
-            <span className="text-xs text-gray-500">電話（只有後台能改）</span>
-            <input
-              value={phoneEdit}
-              onChange={(e) => setPhoneEdit(e.target.value)}
-              placeholder="未填電話"
-              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-            />
-          </label>
-          <button
-            onClick={savePhone}
-            className="text-sm bg-gray-800 text-white rounded-lg px-3 py-2"
-          >
-            儲存電話
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-bold text-lg">
+            {member.display_name || member.line_display_name || "（未填姓名）"}
+          </p>
+          {!member.line_user_id && (
+            <span className="text-[11px] bg-accent/10 text-accent rounded-full px-2 py-0.5">
+              小孩（無 LINE）
+            </span>
+          )}
+          {member.line_user_id && !member.registered_at && (
+            <span className="text-[11px] bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">
+              未註冊
+            </span>
+          )}
         </div>
-        {phoneMsg && <p className="text-xs text-brand">{phoneMsg}</p>}
-        {member.email && <p className="text-sm text-gray-500">Email：{member.email}</p>}
+        {member.line_display_name && (
+          <p className="text-sm text-gray-500">LINE 暱稱：{member.line_display_name}</p>
+        )}
+        {guardian && (
+          <p className="text-sm text-gray-500">
+            家長：
+            <Link href={`/admin/members/${guardian.id}`} className="text-brand underline">
+              {guardian.display_name}
+            </Link>
+          </p>
+        )}
+        {kids.length > 0 && (
+          <div className="text-sm text-gray-500">
+            <span>小孩：</span>
+            {kids.map((k, i) => (
+              <span key={k.id}>
+                {i > 0 && "、"}
+                <Link href={`/admin/members/${k.id}`} className="text-brand underline">
+                  {k.display_name}
+                </Link>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <Field label="真實姓名（學員端鎖定）" value={form.display_name}
+            onChange={(v) => setForm({ ...form, display_name: v })} />
+          <Field label="電話（學員端鎖定）" value={form.phone}
+            onChange={(v) => setForm({ ...form, phone: v })} />
+          <label className="block">
+            <span className="text-xs text-gray-500">性別</span>
+            <select
+              value={form.gender}
+              onChange={(e) => setForm({ ...form, gender: e.target.value })}
+              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="">（未填）</option>
+              <option value="male">男</option>
+              <option value="female">女</option>
+              <option value="undisclosed">不透露</option>
+            </select>
+          </label>
+          <Field label="生日" type="date" value={form.birthday}
+            onChange={(v) => setForm({ ...form, birthday: v })} />
+          <Field label="緊急聯絡人" value={form.emergency_contact_name}
+            onChange={(v) => setForm({ ...form, emergency_contact_name: v })} />
+          <Field label="緊急聯絡電話" value={form.emergency_contact_phone}
+            onChange={(v) => setForm({ ...form, emergency_contact_phone: v })} />
+          <Field label="Email" value={form.email}
+            onChange={(v) => setForm({ ...form, email: v })} />
+        </div>
+        {profileMsg && <p className="text-xs text-brand">{profileMsg}</p>}
+        <button
+          onClick={saveProfile}
+          className="w-full text-sm bg-gray-800 text-white rounded-lg py-2"
+        >
+          儲存基本資料
+        </button>
       </div>
 
       {/* 加堂數 */}

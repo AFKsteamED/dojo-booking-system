@@ -1,5 +1,6 @@
 // 用戶端呼叫後端 API 的小工具（都在瀏覽器執行）
 import type { Member, CreditWallet, SessionWithCounts } from "@/lib/types";
+import type { SessionPerson } from "@/app/api/sessions/[id]/route";
 
 async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => ({}));
@@ -22,14 +23,83 @@ export async function syncMember(input: { idToken: string | null }) {
   return jsonOrThrow(res) as Promise<{ member: Member; profileComplete: boolean }>;
 }
 
-// 只送可編輯欄位（姓名鎖定 LINE、電話首次填後鎖定，都由後端把關）
-export async function updateProfile(input: { phone: string; email: string }) {
+export type RegisterInput = {
+  display_name: string;
+  phone: string;
+  gender: string;
+  birthday: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  email?: string;
+};
+
+// 首次註冊真實資料（完成後姓名鎖定）
+export async function register(input: RegisterInput) {
+  const res = await fetch("/api/members/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return jsonOrThrow(res) as Promise<{ member: Member; profileComplete: boolean }>;
+}
+
+// 註冊後可修改的欄位（姓名、電話鎖定，由後端把關）
+export async function updateProfile(input: {
+  gender?: string;
+  birthday?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  email?: string;
+}) {
   const res = await fetch("/api/members/me", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   return jsonOrThrow(res) as Promise<{ member: Member; profileComplete: boolean }>;
+}
+
+export async function setLocale(locale: "zh" | "en") {
+  const res = await fetch("/api/members/locale", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ locale }),
+  });
+  return jsonOrThrow(res) as Promise<{ member: Member }>;
+}
+
+// 家人（我自己 + 我的小孩）
+export async function getHousehold() {
+  const res = await fetch("/api/members/household");
+  return jsonOrThrow(res) as Promise<{ self: Member; dependents: Member[] }>;
+}
+
+export type DependentInput = {
+  display_name: string;
+  gender: string;
+  birthday: string;
+  phone?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+};
+
+export async function addDependent(input: DependentInput) {
+  const res = await fetch("/api/members/dependents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return jsonOrThrow(res) as Promise<{ dependent: Member }>;
+}
+
+// 姓名建立後鎖定，這裡不能改
+export async function updateDependent(id: string, input: Partial<Omit<DependentInput, "display_name">>) {
+  const res = await fetch(`/api/members/dependents/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return jsonOrThrow(res) as Promise<{ dependent: Member }>;
 }
 
 export async function getSessions(from: string, to: string) {
@@ -43,18 +113,20 @@ export async function getSessionDetail(id: string) {
   return jsonOrThrow(res) as Promise<{
     session: SessionWithCounts;
     roster: string[];
-    myBooked: boolean;
-    myCredits: number;
+    people: SessionPerson[];
   }>;
 }
 
-export async function createBooking(sessionId: string) {
+export type BookResult = { memberId: string; displayName: string; ok: boolean; error?: string };
+
+// 一次幫一人或多人（自己+小孩）預約同一堂課，各自扣各自的堂數
+export async function createBookings(sessionId: string, memberIds: string[]) {
   const res = await fetch("/api/bookings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ sessionId, memberIds }),
   });
-  return jsonOrThrow(res) as Promise<{ bookingId: string }>;
+  return jsonOrThrow(res) as Promise<{ results: BookResult[] }>;
 }
 
 export async function cancelBooking(bookingId: string) {
@@ -76,14 +148,16 @@ export type MyBooking = {
   startMs: number;
 };
 
-export async function getMyBookings(scope: "upcoming" | "past") {
-  const res = await fetch(`/api/bookings?scope=${scope}`);
+export async function getMyBookings(scope: "upcoming" | "past", memberId?: string) {
+  const qs = memberId ? `&memberId=${memberId}` : "";
+  const res = await fetch(`/api/bookings?scope=${scope}${qs}`);
   const data = await jsonOrThrow(res);
   return data.bookings as MyBooking[];
 }
 
-export async function getCredits() {
-  const res = await fetch(`/api/credits`);
+export async function getCredits(memberId?: string) {
+  const qs = memberId ? `?memberId=${memberId}` : "";
+  const res = await fetch(`/api/credits${qs}`);
   return jsonOrThrow(res) as Promise<{
     available: CreditWallet[];
     expired: CreditWallet[];

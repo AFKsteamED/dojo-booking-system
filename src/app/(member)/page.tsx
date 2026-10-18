@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessions } from "@/lib/client-api";
 import { Wordmark } from "@/components/wordmark";
-import { nextNDays, weekdayTW, hhmm } from "@/lib/date-utils";
+import { useLiff } from "@/components/liff-provider";
+import { nextNDays, weekdayLabel, hhmm } from "@/lib/date-utils";
 import type { SessionWithCounts } from "@/lib/types";
 
 export default function SchedulePage() {
+  const { t, locale } = useLiff();
   const days = nextNDays(21);
   const [selected, setSelected] = useState(days[0]);
   const [sessions, setSessions] = useState<SessionWithCounts[] | null>(null);
@@ -24,7 +26,7 @@ export default function SchedulePage() {
       <header className="px-4 pt-5 pb-3">
         <Wordmark className="text-[11px]" />
         <h1 className="text-2xl font-extrabold mt-1 flex items-center gap-2">
-          課程預約
+          {t("schedule_title")}
           <span className="h-5 w-1 rounded-full bg-accent inline-block" />
         </h1>
       </header>
@@ -44,7 +46,7 @@ export default function SchedulePage() {
                   : "bg-surface text-foreground border-border"
               }`}
             >
-              <span className="text-[11px]">{weekdayTW(d)}</span>
+              <span className="text-[11px]">{weekdayLabel(d, locale)}</span>
               <span className="text-lg font-bold leading-none mt-1">{Number(day)}</span>
             </button>
           );
@@ -53,9 +55,9 @@ export default function SchedulePage() {
 
       {/* 場次清單 */}
       <div className="flex-1 px-4 py-2 space-y-3">
-        {sessions === null && <p className="text-center text-muted text-sm py-10">載入中…</p>}
+        {sessions === null && <p className="text-center text-muted text-sm py-10">{t("common_loading")}</p>}
         {sessions?.length === 0 && (
-          <p className="text-center text-muted text-sm py-10">這天沒有課程</p>
+          <p className="text-center text-muted text-sm py-10">{t("schedule_noClasses")}</p>
         )}
         {sessions?.map((s) => (
           <Link
@@ -72,13 +74,13 @@ export default function SchedulePage() {
                     {hhmm(s.start_time)} – {hhmm(s.end_time)}
                   </p>
                   <p className="font-bold text-base mt-0.5">{s.title}</p>
-                  <p className="text-sm text-muted mt-0.5">{s.coach_name ?? "教練"}</p>
+                  <p className="text-sm text-muted mt-0.5">{s.coach_name ?? t("session_coach")}</p>
                 </div>
               </div>
               <div className="text-right shrink-0">
                 <SeatBadge remaining={s.remaining} />
                 <p className="text-[11px] text-muted mt-1 tabular-nums">
-                  {s.booked_count}/{s.capacity} 人
+                  {t("schedule_peopleCount", { booked: s.booked_count, capacity: s.capacity })}
                 </p>
               </div>
             </div>
@@ -91,10 +93,11 @@ export default function SchedulePage() {
 
 // 名額徽章：充足=藍、剩 3 位內=紅（提醒把握）、額滿=灰
 function SeatBadge({ remaining }: { remaining: number }) {
+  const { t } = useLiff();
   if (remaining <= 0) {
     return (
       <span className="inline-block text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-400">
-        已滿
+        {t("schedule_full")}
       </span>
     );
   }
@@ -105,7 +108,7 @@ function SeatBadge({ remaining }: { remaining: number }) {
         low ? "bg-accent/10 text-accent" : "bg-brand/10 text-brand"
       }`}
     >
-      剩 {remaining} 位
+      {t("schedule_seatsLeft", { n: remaining })}
     </span>
   );
 }

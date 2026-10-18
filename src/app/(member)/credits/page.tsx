@@ -6,7 +6,8 @@ import { getCredits } from "@/lib/client-api";
 import type { CreditWallet } from "@/lib/types";
 
 export default function CreditsPage() {
-  const { profile } = useLiff();
+  const { profile, member, dependents, t } = useLiff();
+  const [viewingId, setViewingId] = useState<string | undefined>(undefined);
   const [tab, setTab] = useState<"available" | "expired">("available");
   const [data, setData] = useState<{
     available: CreditWallet[];
@@ -15,57 +16,76 @@ export default function CreditsPage() {
 
   useEffect(() => {
     if (!profile) return;
-    getCredits()
+    setData(null);
+    getCredits(viewingId)
       .then(setData)
       .catch(() => setData({ available: [], expired: [] }));
-  }, [profile]);
+  }, [profile, viewingId]);
 
   const list = data ? data[tab] : null;
 
   return (
     <div className="flex-1 flex flex-col">
       <header className="px-4 pt-4 pb-2">
-        <h1 className="text-xl font-bold">剩餘堂數</h1>
+        <h1 className="text-xl font-bold">{t("credits_title")}</h1>
       </header>
+
+      {dependents.length > 0 && (
+        <div className="px-4 pb-2">
+          <label className="text-xs text-muted">{t("bookings_viewing")}</label>
+          <select
+            value={viewingId ?? ""}
+            onChange={(e) => setViewingId(e.target.value || undefined)}
+            className="mt-1 w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface"
+          >
+            <option value="">{t("session_self")}（{member?.display_name}）</option>
+            {dependents.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.display_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="flex gap-2 px-4 pb-3">
         <Tab active={tab === "available"} onClick={() => setTab("available")}>
-          可使用
+          {t("credits_available")}
         </Tab>
         <Tab active={tab === "expired"} onClick={() => setTab("expired")}>
-          已失效
+          {t("credits_expired")}
         </Tab>
       </div>
 
       <div className="flex-1 px-4 space-y-3">
-        {list === null && <p className="text-center text-muted text-sm py-10">載入中…</p>}
+        {list === null && <p className="text-center text-muted text-sm py-10">{t("common_loading")}</p>}
         {list?.length === 0 && (
           <p className="text-center text-muted text-sm py-10">
-            {tab === "available" ? "目前沒有可用堂數" : "沒有已失效的堂數"}
+            {tab === "available" ? t("credits_noAvailable") : t("credits_noExpired")}
           </p>
         )}
         {list?.map((w) => (
           <div key={w.id} className="bg-surface border border-border rounded-2xl p-4">
             <div className="flex items-center justify-between">
               <p className="font-bold">
-                {w.type === "group" ? "團體課程堂數" : "私人教練堂數"}
+                {w.type === "group" ? t("credits_group") : t("credits_private")}
               </p>
               <p className="text-brand font-bold text-lg">
-                剩 {w.remaining_credits}
-                <span className="text-xs text-muted font-normal"> / {w.total_credits} 堂</span>
+                {t("credits_remaining", { remaining: w.remaining_credits })}
+                <span className="text-xs text-muted font-normal">
+                  {t("credits_ofTotal", { total: w.total_credits })}
+                </span>
               </p>
             </div>
             <p className="text-xs text-muted mt-2">
-              有效期：{w.valid_from} ~ {w.valid_to}
+              {t("credits_validPeriod", { from: w.valid_from, to: w.valid_to })}
             </p>
-            {w.note && <p className="text-xs text-muted mt-1">備註：{w.note}</p>}
+            {w.note && <p className="text-xs text-muted mt-1">{t("credits_note", { note: w.note })}</p>}
           </div>
         ))}
       </div>
 
-      <p className="text-center text-xs text-muted p-4">
-        堂數由道館後台儲值，如需購買請洽櫃檯或教練
-      </p>
+      <p className="text-center text-xs text-muted p-4">{t("credits_footer")}</p>
     </div>
   );
 }

@@ -35,9 +35,14 @@ export function addDaysStr(dateStr: string, n: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+// 星期幾（0=日）。用純日期運算，伺服器在 UTC 也不會算錯一天。
+function dayOfWeek(dateStr: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
 export function weekdayTW(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00+08:00`);
-  return WEEKDAY_TW[d.getDay()];
+  return WEEKDAY_TW[dayOfWeek(dateStr)];
 }
 
 /** 從今天起，回傳連續 n 天的日期字串 */
@@ -56,4 +61,18 @@ export function hhmm(time: string): string {
 export function shortDateTW(dateStr: string): string {
   const [, m, d] = dateStr.split("-");
   return `${Number(m)}/${Number(d)}（${weekdayTW(dateStr)}）`;
+}
+
+const WEEKDAY_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** 依語言回傳星期：中文「五」／英文「Fri」 */
+export function weekdayLabel(dateStr: string, locale: "zh" | "en"): string {
+  return locale === "zh" ? weekdayTW(dateStr) : WEEKDAY_EN[dayOfWeek(dateStr)];
+}
+
+/** 依語言顯示日期：中文「7/24（五）」／英文「Fri 7/24」 */
+export function shortDate(dateStr: string, locale: "zh" | "en"): string {
+  if (locale === "zh") return shortDateTW(dateStr);
+  const [, m, d] = dateStr.split("-");
+  return `${weekdayLabel(dateStr, "en")} ${Number(m)}/${Number(d)}`;
 }
