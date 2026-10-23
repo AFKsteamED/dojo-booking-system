@@ -3,10 +3,20 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/liff-provider";
-import { GenderSelect } from "@/components/gender-select";
+import { Field, TextInput, GenderSelect, ContactRelationSelect } from "@/components/form";
 import { Wordmark } from "@/components/wordmark";
 import { register } from "@/lib/client-api";
 import { todayInTaipei } from "@/lib/date-utils";
+
+const REQUIRED = [
+  "display_name",
+  "phone",
+  "gender",
+  "birthday",
+  "emergency_contact_name",
+  "emergency_contact_relation",
+  "emergency_contact_phone",
+] as const;
 
 // 首次登入的註冊頁：LINE 只是登入帳號，這裡填真實資料。
 export default function RegisterPage() {
@@ -20,9 +30,11 @@ export default function RegisterPage() {
     gender: "",
     birthday: "",
     emergency_contact_name: "",
+    emergency_contact_relation: "",
     emergency_contact_phone: "",
     email: member?.email ?? "",
   });
+  const [tried, setTried] = useState(false); // 按過送出後才顯示紅框
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -33,17 +45,11 @@ export default function RegisterPage() {
   }, [member?.registered_at, done, router]);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const missing = (k: (typeof REQUIRED)[number]) => tried && !form[k].trim();
 
   async function submit() {
-    const required = [
-      form.display_name,
-      form.phone,
-      form.gender,
-      form.birthday,
-      form.emergency_contact_name,
-      form.emergency_contact_phone,
-    ];
-    if (required.some((v) => !v.trim())) {
+    setTried(true);
+    if (REQUIRED.some((k) => !form[k].trim())) {
       setMsg(t("register_required"));
       return;
     }
@@ -69,7 +75,7 @@ export default function RegisterPage() {
           onClick={() => router.replace("/family")}
           className="w-full rounded-2xl border border-brand/40 text-brand py-3 font-bold"
         >
-          ＋ {t("register_addChild")}
+          ＋ {t("register_addMember")}
         </button>
         <button
           onClick={() => router.replace("/")}
@@ -88,49 +94,83 @@ export default function RegisterPage() {
         <h1 className="text-2xl font-extrabold mt-1">{t("register_title")}</h1>
         <p className="text-sm text-muted mt-1">{t("register_intro")}</p>
         {profile?.displayName && (
-          <p className="text-xs text-muted mt-1">
-            {t("profile_lineNickname", { name: profile.displayName })}
-          </p>
+          <p className="text-xs text-muted mt-1">{t("profile_lineNickname", { name: profile.displayName })}</p>
         )}
       </header>
 
       <div className="p-4 space-y-4">
-        <Field label={t("register_nameLabel")} hint={t("register_nameHint")}>
-          <Input value={form.display_name} onChange={set("display_name")} placeholder={t("register_namePlaceholder")} />
+        <Field label={t("register_nameLabel")} required hint={t("register_nameHint")} invalid={missing("display_name")}>
+          <TextInput
+            value={form.display_name}
+            onChange={set("display_name")}
+            placeholder={t("register_namePlaceholder")}
+            invalid={missing("display_name")}
+          />
         </Field>
 
-        <Field label={t("register_phoneLabel")}>
+        <Field label={t("register_phoneLabel")} required invalid={missing("phone")}>
           {phoneLocked ? (
-            <div className="w-full rounded-xl border border-border bg-gray-50 px-4 py-3 text-gray-600">
-              {form.phone}
-            </div>
+            <div className="w-full rounded-xl border border-border bg-gray-50 px-4 py-3 text-gray-600">{form.phone}</div>
           ) : (
-            <Input type="tel" value={form.phone} onChange={set("phone")} placeholder={t("profile_phonePlaceholder")} />
+            <TextInput
+              type="tel"
+              value={form.phone}
+              onChange={set("phone")}
+              placeholder={t("profile_phonePlaceholder")}
+              invalid={missing("phone")}
+            />
           )}
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t("register_genderLabel")}>
-            <GenderSelect value={form.gender} onChange={set("gender")} />
+          <Field label={t("register_genderLabel")} required invalid={missing("gender")}>
+            <GenderSelect value={form.gender} onChange={set("gender")} invalid={missing("gender")} />
           </Field>
-          <Field label={t("register_birthdayLabel")}>
-            <Input type="date" value={form.birthday} onChange={set("birthday")} max={todayInTaipei()} />
+          <Field label={t("register_birthdayLabel")} required invalid={missing("birthday")}>
+            <TextInput
+              type="date"
+              value={form.birthday}
+              onChange={set("birthday")}
+              max={todayInTaipei()}
+              invalid={missing("birthday")}
+            />
           </Field>
         </div>
 
-        <div>
-          <span className="text-sm text-muted">{t("register_ecTitle")}</span>
-          <div className="grid grid-cols-2 gap-3 mt-1">
-            <Input value={form.emergency_contact_name} onChange={set("emergency_contact_name")} placeholder={t("register_ecName")} />
-            <Input type="tel" value={form.emergency_contact_phone} onChange={set("emergency_contact_phone")} placeholder={t("register_ecPhone")} />
+        <fieldset className="rounded-2xl border border-border p-3 space-y-3 min-w-0">
+          <legend className="px-1 text-sm font-bold">{t("register_ecTitle")}</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={t("register_ecName")} required invalid={missing("emergency_contact_name")}>
+              <TextInput
+                value={form.emergency_contact_name}
+                onChange={set("emergency_contact_name")}
+                invalid={missing("emergency_contact_name")}
+              />
+            </Field>
+            <Field label={t("register_ecRelation")} required invalid={missing("emergency_contact_relation")}>
+              <ContactRelationSelect
+                value={form.emergency_contact_relation}
+                onChange={set("emergency_contact_relation")}
+                invalid={missing("emergency_contact_relation")}
+              />
+            </Field>
           </div>
-        </div>
+          <Field label={t("register_ecPhone")} required invalid={missing("emergency_contact_phone")}>
+            <TextInput
+              type="tel"
+              value={form.emergency_contact_phone}
+              onChange={set("emergency_contact_phone")}
+              placeholder={t("profile_phonePlaceholder")}
+              invalid={missing("emergency_contact_phone")}
+            />
+          </Field>
+        </fieldset>
 
         <Field label={t("register_emailLabel")}>
-          <Input type="email" value={form.email} onChange={set("email")} />
+          <TextInput type="email" value={form.email} onChange={set("email")} />
         </Field>
 
-        {msg && <p className="text-center text-sm text-accent bg-accent/10 rounded-lg py-2">{msg}</p>}
+        {msg && <p className="text-center text-sm text-accent bg-accent/10 rounded-lg py-2 px-3">{msg}</p>}
 
         <button
           onClick={submit}
@@ -141,40 +181,5 @@ export default function RegisterPage() {
         </button>
       </div>
     </div>
-  );
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <span className="text-sm text-muted">{label}</span>
-      <div className="mt-1">{children}</div>
-      {hint && <p className="text-[11px] text-muted mt-1">{hint}</p>}
-    </div>
-  );
-}
-
-function Input({
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-  max,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  placeholder?: string;
-  max?: string;
-}) {
-  return (
-    <input
-      type={type}
-      value={value}
-      max={max}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full rounded-xl border border-border bg-surface px-4 py-3 outline-none focus:border-brand"
-    />
   );
 }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { guardAdmin } from "@/lib/admin-auth";
-import { isGender, isValidBirthday } from "@/lib/profile";
+import { isGender, isValidBirthday, isContactRelation, isMemberRelation } from "@/lib/profile";
+import { isLocale } from "@/lib/i18n";
 
 // 會員詳情：基本資料 + 堂數錢包 + 預約紀錄
 export async function GET(
@@ -42,7 +43,7 @@ export async function GET(
   }
   const { data: dependents } = await supa
     .from("members")
-    .select("id, display_name, phone")
+    .select("id, display_name, phone, relation")
     .eq("guardian_id", id);
 
   return NextResponse.json({
@@ -89,6 +90,22 @@ export async function PATCH(
   }
   if (typeof body.emergency_contact_phone === "string") {
     update.emergency_contact_phone = body.emergency_contact_phone.trim() || null;
+  }
+  if ("emergency_contact_relation" in body) {
+    if (body.emergency_contact_relation && !isContactRelation(body.emergency_contact_relation)) {
+      return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+    }
+    update.emergency_contact_relation = body.emergency_contact_relation || null;
+  }
+  if ("relation" in body) {
+    if (body.relation && !isMemberRelation(body.relation)) {
+      return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+    }
+    update.relation = body.relation || null;
+  }
+  if ("locale" in body) {
+    if (!isLocale(body.locale)) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+    update.locale = body.locale;
   }
 
   const { data, error } = await supa

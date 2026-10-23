@@ -49,6 +49,31 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* 保險：任何元素意外超寬都不讓整頁可以左右滑 */
+  overflow-x: clip;
+}
+
+/*
+  iOS Safari / LINE 內建瀏覽器的日期欄位有固定的原生最小寬度，
+  放在兩欄格線裡會撐破版面。拿掉原生外觀並允許縮小，讓它跟其他欄位一樣寬。
+*/
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-left: 0;
+}
+fieldset {
+  min-width: 0;
 }
 
 /* 標題：緊排、平衡斷行，讓字更有份量 */

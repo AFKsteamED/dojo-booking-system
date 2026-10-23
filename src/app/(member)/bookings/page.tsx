@@ -5,23 +5,34 @@ import { useLiff } from "@/components/liff-provider";
 import { getMyBookings, cancelBooking, type MyBooking } from "@/lib/client-api";
 import { messageForCode } from "@/lib/booking-errors";
 import { hhmm, shortDate } from "@/lib/date-utils";
+import { BOOKING_DEADLINE_HOURS } from "@/lib/session-status";
+import { useNow } from "@/lib/use-now";
 
 export default function BookingsPage() {
   const { profile, member, dependents, locale, t } = useLiff();
   const [viewingId, setViewingId] = useState<string | undefined>(undefined);
   const [scope, setScope] = useState<"upcoming" | "past">("upcoming");
-  const [list, setList] = useState<MyBooking[] | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  // 結果連同查詢條件一起存：條件變了、新結果還沒回來前顯示「載入中」
+  const [result, setResult] = useState<{ key: string; list: MyBooking[] } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
-  const load = useCallback(() => {
+  const now = useNow();
+  const key = `${scope}|${viewingId ?? ""}|${reloadKey}`;
+  const list = result?.key === key ? result.list : null;
+
+  // 切換分頁/對象時，丟棄較晚回來的舊回應，避免畫面閃回上一個分頁的資料
+  useEffect(() => {
     if (!profile) return;
-    setList(null);
+    let cancelled = false;
     getMyBookings(scope, viewingId)
-      .then(setList)
-      .catch(() => setList([]));
-  }, [profile, scope, viewingId]);
-
-  useEffect(load, [load]);
+      .then((l) => !cancelled && setResult({ key, list: l }))
+      .catch(() => !cancelled && setResult({ key, list: [] }));
+    return () => {
+      cancelled = true;
+    };
+  }, [profile, scope, viewingId, key]);
 
   async function handleCancel(id: string) {
     if (!profile) return;
@@ -29,10 +40,10 @@ export default function BookingsPage() {
     setMsg(null);
     try {
       await cancelBooking(id);
-      setMsg(t("bookings_cancelSuccess"));
-      load();
+      setMsg({ ok: true, text: t("bookings_cancelSuccess") });
+      reload();
     } catch (e) {
-      setMsg(messageForCode((e as { code?: string }).code ?? "UNKNOWN", locale));
+      setMsg({ ok: false, text: messageForCode((e as { code?: string }).code ?? "UNKNOWN", locale) });
     }
   }
 
@@ -70,8 +81,12 @@ export default function BookingsPage() {
       </div>
 
       {msg && (
-        <p className="mx-4 mb-2 text-center text-sm text-brand bg-brand/10 rounded-lg py-2">
-          {msg}
+        <p
+          className={`mx-4 mb-2 text-center text-sm rounded-lg py-2 px-3 ${
+            msg.ok ? "text-brand bg-brand/10" : "text-accent bg-accent/10"
+          }`}
+        >
+          {msg.text}
         </p>
       )}
 
@@ -86,19 +101,21 @@ export default function BookingsPage() {
             {scope === "upcoming" ? t("bookings_noUpcoming") : t("bookings_noEnded")}
           </p>
         )}
-        {list?.map((b) => (
+        {list?.map((b) => {
+          const canCancel = b.startMs - BOOKING_DEADLINE_HOURS * 3600_000 > now;
+          return (
           <div key={b.id} className="bg-surface border border-border rounded-2xl p-4">
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-sm text-muted">
                   {shortDate(b.session_date, locale)} {hhmm(b.start_time)} – {hhmm(b.end_time)}
                 </p>
                 <p className="font-bold mt-0.5">{b.title}</p>
                 <p className="text-sm text-muted mt-0.5">{b.coach_name ?? t("session_coach")}</p>
               </div>
-              <StatusBadge status={b.status} />
+              <StatusBadge status={b.sessionCancelled ? "session_cancelled" : b.status} />
             </div>
-            {scope === "upcoming" && b.status === "booked" && (
+            {scope === "upcoming" && b.status === "booked" && canCancel && (
               <button
                 onClick={() => handleCancel(b.id)}
                 className="mt-3 w-full text-sm text-red-500 border border-red-200 rounded-xl py-2"
@@ -107,7 +124,8 @@ export default function BookingsPage() {
               </button>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -141,7 +159,8 @@ function StatusBadge({ status }: { status: string }) {
     cancelled: { key: "bookings_status_cancelled", cls: "bg-gray-100 text-gray-400" },
     attended: { key: "bookings_status_attended", cls: "bg-green-100 text-green-600" },
     no_show: { key: "bookings_status_no_show", cls: "bg-red-100 text-red-500" },
+    session_cancelled: { key: "schedule_cancelled", cls: "bg-gray-100 text-gray-500" },
   };
   const m = map[status] ?? map.booked;
-  return <span className={`text-xs px-2 py-1 rounded-full ${m.cls}`}>{t(m.key)}</span>;
+  return <span className={`shrink-0 text-xs px-2 py-1 rounded-full ${m.cls}`}>{t(m.key)}</span>;
 }

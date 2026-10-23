@@ -25,6 +25,9 @@ export const adminApi = {
       birthday?: string | null;
       emergency_contact_name?: string;
       emergency_contact_phone?: string;
+      emergency_contact_relation?: string | null;
+      relation?: string | null;
+      locale?: string;
     }
   ) {
     return j(
@@ -115,8 +118,11 @@ export const adminApi = {
       })
     );
   },
-  async upcoming(limit = 7) {
-    return j(await fetch(`/api/admin/sessions/upcoming?limit=${limit}`));
+  async past(offset = 0, limit = 20) {
+    return j(await fetch(`/api/admin/sessions/past?offset=${offset}&limit=${limit}`));
+  },
+  async upcoming(days = 7) {
+    return j(await fetch(`/api/admin/sessions/upcoming?days=${days}`));
   },
   async generateSessions(weeks: number) {
     return j(

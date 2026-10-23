@@ -7,14 +7,18 @@ import {
   canSeePrivate,
   isProfileComplete,
 } from "@/lib/server-db";
-import type { Member } from "@/lib/types";
+import type { Member, MemberRelation } from "@/lib/types";
 import { relOne } from "@/lib/rel";
 import { maskName } from "@/lib/mask";
+
+// 有效預約（點名後會變成出席/缺席，但仍算在名單內）
+const ACTIVE = ["booked", "attended", "no_show"];
 
 export type SessionPerson = {
   memberId: string;
   displayName: string;
-  relation: "self" | "child";
+  relation: "self" | "member"; // 本人 或 代管成員
+  memberRelation: MemberRelation | null; // 代管成員與本人的關係（子女、配偶…）
   alreadyBooked: boolean;
   bookingId: string | null;
   eligible: boolean; // 私人課：是否在參與名單（公開課一律 true）
@@ -22,7 +26,7 @@ export type SessionPerson = {
   credits: number;
 };
 
-// 課程詳情：場次資訊 + 目前預約名單 + 「我 + 我的小孩」各自的預約狀態
+// 課程詳情：場次資訊 + 目前預約名單 + 「我 + 我代管的成員」各自的預約狀態
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -62,13 +66,13 @@ export async function GET(
     .from("bookings")
     .select("member:members(display_name)")
     .eq("session_id", id)
-    .eq("status", "booked")
+    .in("status", ACTIVE)
     .order("created_at", { ascending: true });
   const names = (roster ?? []).map((r) =>
     maskName(relOne<{ display_name: string }>(r.member)?.display_name ?? "會員")
   );
 
-  // 家庭每位成員各自的預約狀態（本人 + 每個小孩）
+  // 每位成員各自的預約狀態（本人 + 代管成員）
   const people: SessionPerson[] = await Promise.all(
     household.map(async (m, i) => {
       const [{ data: mine }, { data: wallets }] = await Promise.all([
@@ -77,8 +81,8 @@ export async function GET(
           .select("id")
           .eq("session_id", id)
           .eq("member_id", m.id)
-          .eq("status", "booked")
-          .maybeSingle(),
+          .in("status", ACTIVE)
+          .limit(1),
         supa
           .from("credit_wallets")
           .select("remaining_credits")
@@ -94,9 +98,10 @@ export async function GET(
       return {
         memberId: m.id,
         displayName: m.display_name,
-        relation: m.guardian_id ? "child" : "self",
-        alreadyBooked: !!mine,
-        bookingId: mine?.id ?? null,
+        relation: m.guardian_id ? "member" : "self",
+        memberRelation: m.relation,
+        alreadyBooked: !!mine?.[0],
+        bookingId: mine?.[0]?.id ?? null,
         eligible: eligibleFlags[i],
         profileComplete: isProfileComplete(m),
         credits,

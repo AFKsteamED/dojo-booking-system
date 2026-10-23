@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const supa = getServiceSupabase();
   let query = supa
     .from("members")
-    .select("id, display_name, line_display_name, phone, email, guardian_id, registered_at, created_at")
+    .select("id, display_name, line_display_name, phone, email, guardian_id, relation, registered_at, created_at")
     .order("created_at", { ascending: false })
     .limit(100);
   if (q) {

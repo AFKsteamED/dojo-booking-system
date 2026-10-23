@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { getSessionMember, isProfileComplete } from "@/lib/server-db";
-import { isGender, isValidBirthday, str } from "@/lib/profile";
+import { isGender, isContactRelation, isValidBirthday, str } from "@/lib/profile";
 
 // 註冊後修改個人資料。
 // - 真實姓名、電話：鎖定，不接受前端修改（只有後台能改）。
@@ -36,6 +36,12 @@ export async function PATCH(req: NextRequest) {
     const v = str(b.emergency_contact_phone);
     if (!v) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
     update.emergency_contact_phone = v;
+  }
+  if ("emergency_contact_relation" in b) {
+    if (!isContactRelation(b.emergency_contact_relation)) {
+      return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+    }
+    update.emergency_contact_relation = b.emergency_contact_relation;
   }
 
   const supa = getServiceSupabase();

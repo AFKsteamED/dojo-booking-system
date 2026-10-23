@@ -16,6 +16,7 @@ type Tpl = {
   start_time: string;
   end_time: string;
   capacity: number;
+  min_attendance: number;
   visibility: "public" | "private";
 };
 
@@ -33,7 +34,8 @@ export default function ManageCourse({ params }: { params: Promise<{ id: string 
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [capacity, setCapacity] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
+  const [minAtt, setMinAtt] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -47,6 +49,7 @@ export default function ManageCourse({ params }: { params: Promise<{ id: string 
       setStartTime(hhmm(t.start_time));
       setEndTime(hhmm(t.end_time));
       setCapacity(String(t.capacity));
+      setMinAtt(String(t.min_attendance ?? 1));
     });
   }, [id]);
   useEffect(load, [load]);
@@ -55,6 +58,12 @@ export default function ManageCourse({ params }: { params: Promise<{ id: string 
   }, []);
 
   async function save() {
+    const cap = Number(capacity);
+    const min = Number(minAtt);
+    if (!Number.isInteger(cap) || cap < 1) return setMsg({ ok: false, text: "人數上限需為 1 以上的整數" });
+    if (!Number.isInteger(min) || min < 1 || min > cap) {
+      return setMsg({ ok: false, text: "開班人數需介於 1 到人數上限之間" });
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -64,12 +73,13 @@ export default function ManageCourse({ params }: { params: Promise<{ id: string 
         weekday,
         start_time: startTime,
         end_time: endTime,
-        capacity: Number(capacity),
+        capacity: cap,
+        min_attendance: min,
       });
-      setMsg("已儲存，未來場次同步更新 ✓");
+      setMsg({ ok: true, text: "已儲存，未來場次同步更新 ✓" });
       load();
     } catch {
-      setMsg("儲存失敗");
+      setMsg({ ok: false, text: "儲存失敗" });
     } finally {
       setBusy(false);
     }
@@ -119,21 +129,24 @@ export default function ManageCourse({ params }: { params: Promise<{ id: string 
             ))}
           </div>
         </Field>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="開始"><input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></Field>
           <Field label="結束"><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></Field>
-          <Field label="人數上限"><input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)}
+          <Field label="人數上限"><input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></Field>
+          <Field label="開班人數"><input type="number" min={1} value={minAtt} onChange={(e) => setMinAtt(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></Field>
         </div>
-        {msg && <p className="text-sm text-brand">{msg}</p>}
+        {msg && <p className={`text-sm ${msg.ok ? "text-brand" : "text-accent"}`}>{msg.text}</p>}
         <button onClick={save} disabled={busy}
           className="w-full bg-brand text-white rounded-lg py-2.5 font-medium hover:bg-brand-strong disabled:opacity-50">
           {busy ? "儲存中…" : "儲存變更"}
         </button>
         <p className="text-[11px] text-gray-400">
           變更會同步套用到未來場次；改星期會把未來「無人預約」的場次移到新星期。
+          開課前 3 小時人數未達「開班人數」會自動停課並退堂（設為 1 即不會因人數不足停課）。
         </p>
       </div>
 

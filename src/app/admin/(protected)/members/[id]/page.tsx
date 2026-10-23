@@ -4,8 +4,32 @@ import { use, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { adminApi } from "@/lib/admin-api";
-import { toDateStr, addDays, shortDateTW, hhmm } from "@/lib/date-utils";
+import { todayInTaipei, addDaysStr, shortDateTW, hhmm } from "@/lib/date-utils";
 import type { Member, CreditWallet } from "@/lib/types";
+
+const RELATION: Record<string, string> = {
+  child: "子女",
+  spouse: "配偶",
+  parent: "父母",
+  sibling: "兄弟姊妹",
+  friend: "朋友",
+  other: "其他",
+};
+const CONTACT: Record<string, string> = {
+  father: "父親",
+  mother: "母親",
+  spouse: "配偶",
+  child: "子女",
+  sibling: "兄弟姊妹",
+  friend: "朋友",
+  other: "其他",
+};
+const BOOKING_STATUS: Record<string, string> = {
+  booked: "預約中",
+  attended: "已出席",
+  no_show: "未出席",
+  cancelled: "已取消",
+};
 
 type BookingRow = {
   id: string;
@@ -24,13 +48,15 @@ export default function AdminMemberDetail({
   const [wallets, setWallets] = useState<CreditWallet[]>([]);
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [guardian, setGuardian] = useState<{ id: string; display_name: string } | null>(null);
-  const [kids, setKids] = useState<{ id: string; display_name: string; phone: string | null }[]>([]);
+  const [kids, setKids] = useState<
+    { id: string; display_name: string; phone: string | null; relation: string | null }[]
+  >([]);
 
   // 加堂表單
   const [walletType, setWalletType] = useState<"group" | "private">("group");
   const [credits, setCredits] = useState("10");
-  const [validFrom, setValidFrom] = useState(toDateStr(new Date()));
-  const [validTo, setValidTo] = useState(toDateStr(addDays(new Date(), 180)));
+  const [validFrom, setValidFrom] = useState(() => todayInTaipei());
+  const [validTo, setValidTo] = useState(() => addDaysStr(todayInTaipei(), 180));
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -43,7 +69,10 @@ export default function AdminMemberDetail({
     gender: "",
     birthday: "",
     emergency_contact_name: "",
+    emergency_contact_relation: "",
     emergency_contact_phone: "",
+    relation: "",
+    locale: "zh",
   });
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
 
@@ -62,7 +91,10 @@ export default function AdminMemberDetail({
         gender: m.gender ?? "",
         birthday: m.birthday ?? "",
         emergency_contact_name: m.emergency_contact_name ?? "",
+        emergency_contact_relation: m.emergency_contact_relation ?? "",
         emergency_contact_phone: m.emergency_contact_phone ?? "",
+        relation: m.relation ?? "",
+        locale: m.locale ?? "zh",
       });
     });
   }, [id]);
@@ -71,10 +103,15 @@ export default function AdminMemberDetail({
   async function saveProfile() {
     setProfileMsg(null);
     try {
+      const { relation, locale, ...rest } = form;
       await adminApi.updateMember(id, {
-        ...form,
+        ...rest,
         gender: form.gender || null,
         birthday: form.birthday || null,
+        emergency_contact_relation: form.emergency_contact_relation || null,
+        // 代訂成員才有「關係」；有 LINE 的帳號才需要通知語言
+        ...(member?.guardian_id ? { relation: relation || null } : {}),
+        ...(member?.line_user_id ? { locale } : {}),
       });
       setProfileMsg("已更新 ✓");
       load();
@@ -115,9 +152,9 @@ export default function AdminMemberDetail({
           <p className="font-bold text-lg">
             {member.display_name || member.line_display_name || "（未填姓名）"}
           </p>
-          {!member.line_user_id && (
+          {member.guardian_id && (
             <span className="text-[11px] bg-accent/10 text-accent rounded-full px-2 py-0.5">
-              小孩（無 LINE）
+              代訂成員{member.relation ? `（${RELATION[member.relation] ?? member.relation}）` : ""}
             </span>
           )}
           {member.line_user_id && !member.registered_at && (
@@ -131,7 +168,7 @@ export default function AdminMemberDetail({
         )}
         {guardian && (
           <p className="text-sm text-gray-500">
-            家長：
+            帳號持有人（代為預約）：
             <Link href={`/admin/members/${guardian.id}`} className="text-brand underline">
               {guardian.display_name}
             </Link>
@@ -139,13 +176,14 @@ export default function AdminMemberDetail({
         )}
         {kids.length > 0 && (
           <div className="text-sm text-gray-500">
-            <span>小孩：</span>
+            <span>代訂成員：</span>
             {kids.map((k, i) => (
               <span key={k.id}>
                 {i > 0 && "、"}
                 <Link href={`/admin/members/${k.id}`} className="text-brand underline">
                   {k.display_name}
                 </Link>
+                {k.relation && <span className="text-gray-400">（{RELATION[k.relation] ?? k.relation}）</span>}
               </span>
             ))}
           </div>
@@ -165,17 +203,28 @@ export default function AdminMemberDetail({
               <option value="">（未填）</option>
               <option value="male">男</option>
               <option value="female">女</option>
-              <option value="undisclosed">不透露</option>
+              <option value="undisclosed">不公開</option>
             </select>
           </label>
           <Field label="生日" type="date" value={form.birthday}
             onChange={(v) => setForm({ ...form, birthday: v })} />
           <Field label="緊急聯絡人" value={form.emergency_contact_name}
             onChange={(v) => setForm({ ...form, emergency_contact_name: v })} />
+          <Select label="緊急聯絡人關係" value={form.emergency_contact_relation}
+            onChange={(v) => setForm({ ...form, emergency_contact_relation: v })} options={CONTACT} />
           <Field label="緊急聯絡電話" value={form.emergency_contact_phone}
             onChange={(v) => setForm({ ...form, emergency_contact_phone: v })} />
           <Field label="Email" value={form.email}
             onChange={(v) => setForm({ ...form, email: v })} />
+          {member.guardian_id && (
+            <Select label="與帳號持有人的關係" value={form.relation}
+              onChange={(v) => setForm({ ...form, relation: v })} options={RELATION} />
+          )}
+          {member.line_user_id && (
+            <Select label="介面與 LINE 通知語言" value={form.locale}
+              onChange={(v) => setForm({ ...form, locale: v })} options={{ zh: "中文", en: "English" }}
+              allowEmpty={false} />
+          )}
         </div>
         {profileMsg && <p className="text-xs text-brand">{profileMsg}</p>}
         <button
@@ -262,12 +311,44 @@ export default function AdminMemberDetail({
                   ? `${shortDateTW(b.session.session_date)} ${hhmm(b.session.start_time)} ${b.session.title}`
                   : "—"}
               </span>
-              <span className="text-gray-400">{b.status}</span>
+              <span className="text-gray-400 shrink-0">{BOOKING_STATUS[b.status] ?? b.status}</span>
             </div>
           ))}
         </div>
       </div>
     </div>
+  );
+}
+
+function Select({
+  label,
+  value,
+  onChange,
+  options,
+  allowEmpty = true,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Record<string, string>;
+  allowEmpty?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-gray-500">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+      >
+        {allowEmpty && <option value="">（未填）</option>}
+        {Object.entries(options).map(([v, t]) => (
+          <option key={v} value={v}>
+            {t}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

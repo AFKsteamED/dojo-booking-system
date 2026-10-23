@@ -6,6 +6,7 @@ import { useLiff } from "@/components/liff-provider";
 import { getSessionDetail, createBookings, type BookResult } from "@/lib/client-api";
 import { messageForCode } from "@/lib/booking-errors";
 import { hhmm, shortDate } from "@/lib/date-utils";
+import { sessionState, bookingDeadlineMs } from "@/lib/session-status";
 import type { SessionWithCounts } from "@/lib/types";
 import type { SessionPerson } from "@/app/api/sessions/[id]/route";
 import type { DictKey, Locale } from "@/lib/i18n";
@@ -29,7 +30,7 @@ export default function SessionDetailPage({
   } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = () => {
@@ -71,18 +72,18 @@ export default function SessionDetailPage({
 
   async function handleBook(memberIds: string[]) {
     if (memberIds.length === 0) {
-      setMsg(t("session_selectAtLeastOne"));
+      setMsg({ ok: false, text: t("session_selectAtLeastOne") });
       return;
     }
     setBusy(true);
     setMsg(null);
     try {
       const { results } = await createBookings(id, memberIds);
-      setMsg(formatResults(results, locale, t));
+      setMsg({ ok: results.every((r) => r.ok), text: formatResults(results, locale, t) });
       setSelected(new Set());
       load();
     } catch (e) {
-      setMsg(messageForCode((e as { code?: string }).code ?? "UNKNOWN", locale));
+      setMsg({ ok: false, text: messageForCode((e as { code?: string }).code ?? "UNKNOWN", locale) });
     } finally {
       setBusy(false);
     }
@@ -104,12 +105,16 @@ export default function SessionDetailPage({
   if (!data) return <p className="text-center text-muted text-sm py-16">{t("common_loading")}</p>;
   const s = data.session;
   const self = data.people.find((p) => p.relation === "self");
+  const state = sessionState(s);
+  const anyBooked = data.people.some((p) => p.alreadyBooked);
 
   return (
     <div className="flex-1 flex flex-col">
       <header className="px-4 py-3 border-b border-border flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-muted text-xl">‹</button>
-        <h1 className="font-bold">{s.title}</h1>
+        <button onClick={() => router.back()} className="text-muted text-xl" aria-label="back">
+          ‹
+        </button>
+        <h1 className={`font-bold ${state === "cancelled" ? "line-through text-muted" : ""}`}>{s.title}</h1>
         {s.visibility === "private" && (
           <span className="text-[11px] bg-accent/10 text-accent rounded-full px-2 py-0.5">
             {t("session_privateBadge")}
@@ -118,14 +123,28 @@ export default function SessionDetailPage({
       </header>
 
       <div className="p-4 space-y-4">
+        {state === "cancelled" && (
+          <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-sm">
+            <p className="font-bold text-accent">{t("session_statusCancelled")}</p>
+            <p className="text-muted mt-1">
+              {t(s.cancel_reason === "manual" ? "session_cancelledManual" : "session_cancelledInsufficient")}
+            </p>
+          </div>
+        )}
+
         <div className="bg-surface border border-border rounded-2xl p-4 space-y-2 text-sm">
           <Row label={t("session_time")} value={`${shortDate(s.session_date, locale)} ${hhmm(s.start_time)} – ${hhmm(s.end_time)}`} />
           <Row label={t("session_coach")} value={s.coach_name ?? t("session_coach")} />
           <Row label={t("session_location")} value={t("brand_name")} />
-          <Row
-            label={t("session_remainingSeats")}
-            value={s.remaining > 0 ? t("session_seats", { n: s.remaining }) : t("schedule_full")}
-          />
+          {state !== "cancelled" && (
+            <Row
+              label={t("session_remainingSeats")}
+              value={s.remaining > 0 ? t("session_seats", { n: s.remaining }) : t("schedule_full")}
+            />
+          )}
+          {s.min_attendance > 1 && (
+            <Row label={t("session_minAttendance")} value={t("session_minValue", { n: s.min_attendance })} />
+          )}
         </div>
 
         <div className="bg-surface border border-border rounded-2xl p-4">
@@ -143,7 +162,7 @@ export default function SessionDetailPage({
           )}
         </div>
 
-        {hasFamily && (
+        {hasFamily && state !== "cancelled" && (
           <div className="bg-surface border border-border rounded-2xl p-4">
             <p className="text-sm font-semibold mb-2">{t("session_bookFor")}</p>
             <div className="space-y-2">
@@ -158,7 +177,7 @@ export default function SessionDetailPage({
                       disabled ? "opacity-50" : "cursor-pointer"
                     } ${checked ? "border-brand bg-brand/5" : "border-border"}`}
                   >
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 min-w-0">
                       <input
                         type="checkbox"
                         aria-label={p.relation === "self" ? t("session_self") : p.displayName}
@@ -167,11 +186,16 @@ export default function SessionDetailPage({
                         onChange={() => toggle(p.memberId)}
                         className="w-4 h-4 accent-brand"
                       />
-                      <span className="text-sm font-medium">
+                      <span className="text-sm font-medium truncate">
                         {p.relation === "self" ? t("session_self") : p.displayName}
                       </span>
+                      {p.memberRelation && (
+                        <span className="shrink-0 text-[10px] bg-brand/10 text-brand rounded-full px-1.5 py-0.5">
+                          {t(`relation_${p.memberRelation}`)}
+                        </span>
+                      )}
                     </span>
-                    <span className="text-xs text-muted">
+                    <span className="shrink-0 text-xs text-muted">
                       {p.alreadyBooked
                         ? t("session_statusBooked")
                         : reason ?? t("session_creditsLeft", { n: p.credits })}
@@ -184,15 +208,34 @@ export default function SessionDetailPage({
         )}
 
         {msg && (
-          <p className="text-center text-sm text-brand bg-brand/10 rounded-lg py-2 whitespace-pre-line">
-            {msg}
+          <p
+            className={`text-center text-sm rounded-lg py-2 px-3 whitespace-pre-line ${
+              msg.ok ? "text-brand bg-brand/10" : "text-accent bg-accent/10"
+            }`}
+          >
+            {msg.text}
           </p>
         )}
       </div>
 
       {/* 底部動作按鈕 */}
       <div className="mt-auto p-4">
-        {hasFamily ? (
+        {state === "cancelled" ? (
+          <button
+            onClick={() => router.push("/")}
+            className="w-full rounded-2xl border border-brand/40 text-brand py-4 font-bold"
+          >
+            {t("session_backToSchedule")}
+          </button>
+        ) : state === "closed" ? (
+          anyBooked ? (
+            <div className="text-center text-sm text-muted">{t("session_bookedClosedNote")}</div>
+          ) : (
+            <div className="w-full rounded-2xl bg-gray-100 text-gray-400 py-4 font-bold text-center">
+              {t("session_statusClosed")}
+            </div>
+          )
+        ) : hasFamily ? (
           <button
             disabled={busy || selected.size === 0}
             onClick={() => handleBook(Array.from(selected))}
@@ -220,7 +263,12 @@ export default function SessionDetailPage({
             );
           })()
         )}
-        <p className="text-[11px] text-muted text-center mt-3">{t("session_cancelPolicy")}</p>
+        {state === "open" && (
+          <div className="text-[11px] text-muted text-center mt-3 space-y-1">
+            {s.min_attendance > 1 && <p>{t("session_deadlineNote", { min: s.min_attendance })}</p>}
+            <p>{t("session_cancelPolicy")}</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -228,8 +276,7 @@ export default function SessionDetailPage({
 
 // 預約前先判斷能不能約，直接顯示原因（不用點了才失敗）
 function blockReasonFor(p: SessionPerson, s: SessionWithCounts, t: Translator): string | null {
-  const startMs = new Date(`${s.session_date}T${s.start_time}+08:00`).getTime();
-  if (startMs <= Date.now()) return t("session_statusPast");
+  if (bookingDeadlineMs(s) <= Date.now()) return t("session_statusClosed");
   if (s.remaining <= 0) return t("schedule_full");
   if (s.visibility === "private" && !p.eligible) return t("session_statusNotEligible");
   if (!p.profileComplete) return t("session_statusProfileIncomplete");

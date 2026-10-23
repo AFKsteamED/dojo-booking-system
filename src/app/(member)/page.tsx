@@ -1,25 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getSessions } from "@/lib/client-api";
 import { Wordmark } from "@/components/wordmark";
 import { useLiff } from "@/components/liff-provider";
-import { nextNDays, weekdayLabel, hhmm } from "@/lib/date-utils";
+import { weekdayLabel, hhmm, todayInTaipei, addDaysStr } from "@/lib/date-utils";
+import { sessionState, type SessionState } from "@/lib/session-status";
+import { useNow } from "@/lib/use-now";
 import type { SessionWithCounts } from "@/lib/types";
+
+const DAYS = 21;
 
 export default function SchedulePage() {
   const { t, locale } = useLiff();
-  const days = nextNDays(21);
+  const [days] = useState(() => {
+    const today = todayInTaipei();
+    return Array.from({ length: DAYS }, (_, i) => addDaysStr(today, i));
+  });
   const [selected, setSelected] = useState(days[0]);
-  const [sessions, setSessions] = useState<SessionWithCounts[] | null>(null);
+  const [all, setAll] = useState<SessionWithCounts[] | null>(null);
 
+  // 一次載入三週課表，切換日期只在前端篩選：
+  // 不會因為連點日期、舊的回應較晚回來而閃現別天的課程
   useEffect(() => {
-    setSessions(null);
-    getSessions(selected, selected)
-      .then(setSessions)
-      .catch(() => setSessions([]));
-  }, [selected]);
+    let cancelled = false;
+    getSessions(days[0], days[days.length - 1])
+      .then((s) => !cancelled && setAll(s))
+      .catch(() => !cancelled && setAll([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [days]);
+
+  const byDate = useMemo(() => {
+    const m = new Map<string, SessionWithCounts[]>();
+    for (const s of all ?? []) {
+      const list = m.get(s.session_date) ?? [];
+      list.push(s);
+      m.set(s.session_date, list);
+    }
+    return m;
+  }, [all]);
+
+  const sessions = all === null ? null : byDate.get(selected) ?? [];
+  const now = useNow();
 
   return (
     <div className="flex-1 flex flex-col">
@@ -31,23 +56,28 @@ export default function SchedulePage() {
         </h1>
       </header>
 
-      {/* 日期橫向選擇 */}
+      {/* 日期橫向選擇；有課的日子下方有小圓點 */}
       <div className="flex gap-2 overflow-x-auto px-4 pb-3 no-scrollbar">
         {days.map((d) => {
           const active = d === selected;
+          const hasClass = byDate.has(d);
           const [, , day] = d.split("-");
           return (
             <button
               key={d}
               onClick={() => setSelected(d)}
-              className={`flex flex-col items-center shrink-0 w-12 py-2 rounded-xl border ${
-                active
-                  ? "bg-brand text-brand-ink border-brand"
-                  : "bg-surface text-foreground border-border"
+              aria-pressed={active}
+              className={`flex flex-col items-center shrink-0 w-12 pt-2 pb-1.5 rounded-xl border ${
+                active ? "bg-brand text-brand-ink border-brand" : "bg-surface text-foreground border-border"
               }`}
             >
               <span className="text-[11px]">{weekdayLabel(d, locale)}</span>
               <span className="text-lg font-bold leading-none mt-1">{Number(day)}</span>
+              <span
+                className={`mt-1 h-1 w-1 rounded-full ${
+                  hasClass ? (active ? "bg-brand-ink" : "bg-brand") : "bg-transparent"
+                }`}
+              />
             </button>
           );
         })}
@@ -56,58 +86,66 @@ export default function SchedulePage() {
       {/* 場次清單 */}
       <div className="flex-1 px-4 py-2 space-y-3">
         {sessions === null && <p className="text-center text-muted text-sm py-10">{t("common_loading")}</p>}
-        {sessions?.length === 0 && (
-          <p className="text-center text-muted text-sm py-10">{t("schedule_noClasses")}</p>
-        )}
-        {sessions?.map((s) => (
-          <Link
-            key={s.id}
-            href={`/session/${s.id}`}
-            className="block bg-surface border border-border rounded-2xl p-4 shadow-card hover:-translate-y-0.5 hover:border-brand/40 active:translate-y-0"
-          >
-            <div className="flex items-stretch justify-between gap-3">
-              {/* 左側藍色時段色條 */}
-              <div className="flex items-stretch gap-3">
-                <span className="w-1 rounded-full bg-brand/80 shrink-0" />
-                <div>
-                  <p className="text-sm text-muted tabular-nums">
-                    {hhmm(s.start_time)} – {hhmm(s.end_time)}
-                  </p>
-                  <p className="font-bold text-base mt-0.5">{s.title}</p>
-                  <p className="text-sm text-muted mt-0.5">{s.coach_name ?? t("session_coach")}</p>
+        {sessions?.length === 0 && <p className="text-center text-muted text-sm py-10">{t("schedule_noClasses")}</p>}
+        {sessions?.map((s) => {
+          const state = sessionState(s, now);
+          const dim = state !== "open" && !(state === "closed" && s.household_booked);
+          const showMin = state === "open" && s.min_attendance > 1 && s.booked_count < s.min_attendance;
+          return (
+            <Link
+              key={s.id}
+              href={`/session/${s.id}`}
+              className={`block bg-surface border border-border rounded-2xl p-4 shadow-card hover:-translate-y-0.5 hover:border-brand/40 active:translate-y-0 ${
+                dim ? "opacity-60" : ""
+              }`}
+            >
+              <div className="flex items-stretch justify-between gap-3">
+                {/* 左側時段色條：停課為灰 */}
+                <div className="flex items-stretch gap-3 min-w-0">
+                  <span className={`w-1 rounded-full shrink-0 ${state === "cancelled" ? "bg-gray-300" : "bg-brand/80"}`} />
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted tabular-nums">
+                      {hhmm(s.start_time)} – {hhmm(s.end_time)}
+                    </p>
+                    <p className={`font-bold text-base mt-0.5 ${state === "cancelled" ? "line-through" : ""}`}>
+                      {s.title}
+                    </p>
+                    <p className="text-sm text-muted mt-0.5">{s.coach_name ?? t("session_coach")}</p>
+                    {showMin && (
+                      <p className="text-[11px] text-muted mt-1">
+                        {t("schedule_minNote", { min: s.min_attendance, n: s.booked_count })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <StatusBadge state={state} booked={!!s.household_booked} remaining={s.remaining} />
+                  {state !== "cancelled" && (
+                    <p className="text-[11px] text-muted mt-1 tabular-nums">
+                      {t("schedule_peopleCount", { booked: s.booked_count, capacity: s.capacity })}
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="text-right shrink-0">
-                <SeatBadge remaining={s.remaining} />
-                <p className="text-[11px] text-muted mt-1 tabular-nums">
-                  {t("schedule_peopleCount", { booked: s.booked_count, capacity: s.capacity })}
-                </p>
-              </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// 名額徽章：充足=藍、剩 3 位內=紅（提醒把握）、額滿=灰
-function SeatBadge({ remaining }: { remaining: number }) {
+// 狀態徽章優先順序：停課 > 已預約 > 已截止 > 額滿 > 尚餘名額（剩 3 位內轉紅提醒）
+function StatusBadge({ state, booked, remaining }: { state: SessionState; booked: boolean; remaining: number }) {
   const { t } = useLiff();
-  if (remaining <= 0) {
-    return (
-      <span className="inline-block text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-400">
-        {t("schedule_full")}
-      </span>
-    );
-  }
+  const base = "inline-block text-xs font-medium px-2.5 py-1 rounded-full";
+  if (state === "cancelled") return <span className={`${base} bg-gray-100 text-gray-500`}>{t("schedule_cancelled")}</span>;
+  if (booked) return <span className={`${base} bg-brand text-brand-ink`}>✓ {t("schedule_booked")}</span>;
+  if (state === "closed") return <span className={`${base} bg-gray-100 text-gray-500`}>{t("schedule_closed")}</span>;
+  if (remaining <= 0) return <span className={`${base} bg-gray-100 text-gray-400`}>{t("schedule_full")}</span>;
   const low = remaining <= 3;
   return (
-    <span
-      className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full ${
-        low ? "bg-accent/10 text-accent" : "bg-brand/10 text-brand"
-      }`}
-    >
+    <span className={`${base} ${low ? "bg-accent/10 text-accent" : "bg-brand/10 text-brand"}`}>
       {t("schedule_seatsLeft", { n: remaining })}
     </span>
   );

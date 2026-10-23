@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
       start_time: string;
       end_time: string;
       title: string;
+      status: string;
       coach: { name: string } | null;
     }>(b.session);
     // 以台北時間組出開課時間
@@ -51,6 +52,7 @@ export async function GET(req: NextRequest) {
       start_time: s?.start_time ?? "",
       end_time: s?.end_time ?? "",
       startMs,
+      sessionCancelled: s?.status === "cancelled", // 停課（含人數不足自動停課）
     };
   });
 

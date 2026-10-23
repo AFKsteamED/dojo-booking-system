@@ -73,12 +73,13 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const { profile, isMock, idToken } = await initLiff();
+        const { profile, isMock, idToken, lang } = await initLiff();
         if (cancelled) return;
         setProfile(profile);
         setIsMock(isMock);
-        // 用 LINE 身分驗證（或開發假身分）同步會員並取得 session
-        const { member, profileComplete } = await syncMember({ idToken });
+        // 用 LINE 身分驗證（或開發假身分）同步會員並取得 session；
+        // 新會員依 LINE App 語言自動預設中/英
+        const { member, profileComplete } = await syncMember({ idToken, lang });
         if (cancelled) return;
         setMemberState(member);
         setProfileComplete(profileComplete);

@@ -12,16 +12,18 @@ async function propagateEdit(templateId: string, fields: Record<string, unknown>
 
   // 未來場次同步欄位（保留預約）
   const sessionFields: Record<string, unknown> = {};
-  for (const k of ["title", "coach_id", "start_time", "end_time", "capacity"]) {
+  for (const k of ["title", "coach_id", "start_time", "end_time", "capacity", "min_attendance"]) {
     if (k in fields) sessionFields[k] = fields[k];
   }
   if (Object.keys(sessionFields).length) {
+    // 已過截止處理的場次（closed_at 有值）不再變動
     await supa
       .from("class_sessions")
       .update(sessionFields)
       .eq("template_id", templateId)
       .gte("session_date", today)
-      .eq("status", "scheduled");
+      .eq("status", "scheduled")
+      .is("closed_at", null);
   }
 
   if (weekdayChanged) {
@@ -80,7 +82,10 @@ async function deactivateTemplate(templateId: string) {
         }
       }
     }
-    await supa.from("class_sessions").update({ status: "cancelled" }).eq("id", s.id);
+    await supa
+      .from("class_sessions")
+      .update({ status: "cancelled", cancel_reason: "manual", closed_at: new Date().toISOString() })
+      .eq("id", s.id);
   }
   await supa.from("class_templates").update({ active: false }).eq("id", templateId);
 }
@@ -115,6 +120,16 @@ export async function PATCH(
   if (b.start_time) fields.start_time = b.start_time;
   if (b.end_time) fields.end_time = b.end_time;
   if (Number.isInteger(Number(b.capacity)) && Number(b.capacity) > 0) fields.capacity = Number(b.capacity);
+  if (Number.isInteger(Number(b.min_attendance)) && Number(b.min_attendance) >= 1) {
+    fields.min_attendance = Number(b.min_attendance);
+  }
+  if (
+    typeof fields.min_attendance === "number" &&
+    typeof fields.capacity === "number" &&
+    fields.min_attendance > fields.capacity
+  ) {
+    return NextResponse.json({ error: "MIN_EXCEEDS_CAPACITY" }, { status: 400 });
+  }
   let weekdayChanged = false;
   if (Number.isInteger(Number(b.weekday)) && Number(b.weekday) >= 0 && Number(b.weekday) <= 6) {
     fields.weekday = Number(b.weekday);

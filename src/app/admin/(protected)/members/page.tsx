@@ -4,12 +4,22 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { adminApi } from "@/lib/admin-api";
 
+const RELATION: Record<string, string> = {
+  child: "子女",
+  spouse: "配偶",
+  parent: "父母",
+  sibling: "兄弟姊妹",
+  friend: "朋友",
+  other: "其他",
+};
+
 type M = {
   id: string;
   display_name: string;
   line_display_name: string | null;
   phone: string | null;
   guardian_id: string | null;
+  relation: string | null;
   registered_at: string | null;
 };
 
@@ -18,10 +28,17 @@ export default function AdminMembersPage() {
   const [list, setList] = useState<M[] | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const t = setTimeout(() => {
-      adminApi.members(q).then((d) => setList(d.members)).catch(() => setList([]));
+      adminApi
+        .members(q)
+        .then((d) => !cancelled && setList(d.members))
+        .catch(() => !cancelled && setList([]));
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [q]);
 
   return (
@@ -54,7 +71,9 @@ export default function AdminMembersPage() {
                     <span className="text-[11px] bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">未註冊</span>
                   )}
                   {m.guardian_id && (
-                    <span className="text-[11px] bg-accent/10 text-accent rounded-full px-2 py-0.5">小孩</span>
+                    <span className="text-[11px] bg-accent/10 text-accent rounded-full px-2 py-0.5">
+                      代訂{m.relation ? `・${RELATION[m.relation] ?? m.relation}` : ""}
+                    </span>
                   )}
                 </p>
                 <p className="text-xs text-gray-400">

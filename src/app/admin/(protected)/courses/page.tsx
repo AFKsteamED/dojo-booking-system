@@ -15,6 +15,7 @@ type Template = {
   end_time: string;
   capacity: number;
   visibility: "public" | "private";
+  min_attendance: number;
   coach_name: string | null;
   member_count: number;
 };
@@ -29,9 +30,12 @@ export default function CoursesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">常態課／名單</h1>
+        <div>
+          <h1 className="text-lg font-bold">常態課設定</h1>
+          <p className="text-xs text-gray-400 mt-0.5">每週固定的課程；修改後會套用到未來的場次</p>
+        </div>
         <Link href="/admin/courses/new"
-          className="text-sm bg-brand text-white rounded-lg px-3 py-2 hover:bg-brand-strong">
+          className="shrink-0 text-sm bg-brand text-white rounded-lg px-3 py-2 hover:bg-brand-strong">
           ＋ 新增課程
         </Link>
       </div>
@@ -54,6 +58,8 @@ export default function CoursesPage() {
               </div>
               <p className="text-sm text-gray-500 mt-0.5">
                 每週{WEEKDAYS[t.weekday]} {hhmm(t.start_time)}–{hhmm(t.end_time)} · {t.coach_name ?? "教練"}
+                {` · 上限 ${t.capacity} 人`}
+                {t.min_attendance > 1 && ` · 滿 ${t.min_attendance} 人開班`}
                 {t.visibility === "private" && ` · 名單 ${t.member_count} 人`}
               </p>
             </div>

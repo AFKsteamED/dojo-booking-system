@@ -3,33 +3,49 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/liff-provider";
-import { GenderSelect } from "@/components/gender-select";
+import {
+  Field,
+  TextInput,
+  GenderSelect,
+  ContactRelationSelect,
+  MemberRelationSelect,
+} from "@/components/form";
 import { addDependent, updateDependent } from "@/lib/client-api";
 import { todayInTaipei } from "@/lib/date-utils";
 import type { Member } from "@/lib/types";
 
 const EMPTY = {
   display_name: "",
+  relation: "",
   gender: "",
   birthday: "",
   phone: "",
   emergency_contact_name: "",
+  emergency_contact_relation: "",
   emergency_contact_phone: "",
 };
+const REQUIRED = ["display_name", "relation", "gender", "birthday"] as const;
 
+// 成員管理：帳號持有人替家人或朋友（孩童、長輩、沒有 LINE 的人）建立資料並代為預約
 export default function FamilyPage() {
   const router = useRouter();
   const { dependents, reloadHousehold, t } = useLiff();
 
   const [form, setForm] = useState(EMPTY);
+  // null＝自動：還沒有任何成員時直接展開表單（成員清單是非同步載入的）
+  const [openState, setOpen] = useState<boolean | null>(null);
+  const open = openState ?? dependents.length === 0;
+  const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const set = (k: keyof typeof EMPTY) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const missing = (k: (typeof REQUIRED)[number]) => tried && !form[k].trim();
 
   async function handleAdd() {
-    if (!form.display_name.trim() || !form.gender || !form.birthday) {
-      setMsg(t("family_required"));
+    setTried(true);
+    if (REQUIRED.some((k) => !form[k].trim())) {
+      setMsg({ ok: false, text: t("register_required") });
       return;
     }
     setBusy(true);
@@ -37,17 +53,21 @@ export default function FamilyPage() {
     try {
       await addDependent({
         display_name: form.display_name.trim(),
+        relation: form.relation,
         gender: form.gender,
         birthday: form.birthday,
         phone: form.phone.trim() || undefined,
         emergency_contact_name: form.emergency_contact_name.trim() || undefined,
+        emergency_contact_relation: form.emergency_contact_relation || undefined,
         emergency_contact_phone: form.emergency_contact_phone.trim() || undefined,
       });
       setForm(EMPTY);
-      setMsg(t("family_added"));
+      setTried(false);
+      setOpen(false);
+      setMsg({ ok: true, text: t("family_added") });
       reloadHousehold();
     } catch {
-      setMsg(t("profile_saveFailed"));
+      setMsg({ ok: false, text: t("profile_saveFailed") });
     } finally {
       setBusy(false);
     }
@@ -56,45 +76,104 @@ export default function FamilyPage() {
   return (
     <div className="flex-1 flex flex-col">
       <header className="px-4 pt-4 pb-2 flex items-center gap-3 pr-16">
-        <button onClick={() => router.back()} className="text-muted text-xl">‹</button>
+        <button onClick={() => router.back()} className="text-muted text-xl" aria-label="back">
+          ‹
+        </button>
         <h1 className="text-xl font-bold">{t("family_title")}</h1>
       </header>
 
       <div className="p-4 space-y-4">
-        <p className="text-xs text-muted">{t("family_intro")}</p>
+        <p className="text-xs text-muted leading-relaxed">{t("family_intro")}</p>
 
-        <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
-          <p className="font-bold text-sm">{t("family_addTitle")}</p>
-          <Field label={t("family_nameLabel")} hint={t("family_nameLockedNote")}>
-            <Input value={form.display_name} onChange={set("display_name")} placeholder={t("family_namePlaceholder")} />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("family_genderLabel")}>
-              <GenderSelect value={form.gender} onChange={set("gender")} />
+        {msg && (
+          <p
+            className={`text-center text-sm rounded-lg py-2 px-3 ${
+              msg.ok ? "text-brand bg-brand/10" : "text-accent bg-accent/10"
+            }`}
+          >
+            {msg.text}
+          </p>
+        )}
+
+        {!open ? (
+          <button
+            onClick={() => {
+              setOpen(true);
+              setMsg(null);
+            }}
+            className="w-full rounded-2xl border border-dashed border-brand/50 text-brand py-3 font-bold"
+          >
+            ＋ {t("family_addTitle")}
+          </button>
+        ) : (
+          <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
+            <p className="font-bold text-sm">{t("family_addTitle")}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label={t("family_nameLabel")}
+                required
+                invalid={missing("display_name")}
+              >
+                <TextInput
+                  value={form.display_name}
+                  onChange={set("display_name")}
+                  placeholder={t("family_namePlaceholder")}
+                  invalid={missing("display_name")}
+                />
+              </Field>
+              <Field label={t("family_relationLabel")} required invalid={missing("relation")}>
+                <MemberRelationSelect value={form.relation} onChange={set("relation")} invalid={missing("relation")} />
+              </Field>
+            </div>
+            <p className="text-[11px] text-muted -mt-1">{t("family_nameLockedNote")}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("family_genderLabel")} required invalid={missing("gender")}>
+                <GenderSelect value={form.gender} onChange={set("gender")} invalid={missing("gender")} />
+              </Field>
+              <Field label={t("family_birthdayLabel")} required invalid={missing("birthday")}>
+                <TextInput
+                  type="date"
+                  value={form.birthday}
+                  onChange={set("birthday")}
+                  max={todayInTaipei()}
+                  invalid={missing("birthday")}
+                />
+              </Field>
+            </div>
+            <Field label={t("family_phoneLabel")}>
+              <TextInput type="tel" value={form.phone} onChange={set("phone")} />
             </Field>
-            <Field label={t("family_birthdayLabel")}>
-              <Input type="date" value={form.birthday} onChange={set("birthday")} max={todayInTaipei()} />
-            </Field>
-          </div>
-          <Field label={t("family_phoneLabel")}>
-            <Input type="tel" value={form.phone} onChange={set("phone")} />
-          </Field>
-          <div>
-            <span className="text-sm text-muted">{t("family_ecHint")}</span>
-            <div className="grid grid-cols-2 gap-3 mt-1">
-              <Input value={form.emergency_contact_name} onChange={set("emergency_contact_name")} placeholder={t("register_ecName")} />
-              <Input type="tel" value={form.emergency_contact_phone} onChange={set("emergency_contact_phone")} placeholder={t("register_ecPhone")} />
+            <EmergencyFields
+              name={form.emergency_contact_name}
+              relation={form.emergency_contact_relation}
+              phone={form.emergency_contact_phone}
+              onName={set("emergency_contact_name")}
+              onRelation={set("emergency_contact_relation")}
+              onPhone={set("emergency_contact_phone")}
+            />
+            <div className="flex gap-2">
+              {dependents.length > 0 && (
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    setTried(false);
+                    setMsg(null);
+                  }}
+                  className="flex-1 rounded-xl border border-border text-muted py-3 font-bold"
+                >
+                  {t("family_close")}
+                </button>
+              )}
+              <button
+                onClick={handleAdd}
+                disabled={busy}
+                className="flex-[2] rounded-xl bg-brand text-brand-ink py-3 font-bold hover:bg-brand-strong disabled:opacity-50"
+              >
+                {busy ? t("common_processing") : t("family_addButton")}
+              </button>
             </div>
           </div>
-          {msg && <p className="text-sm text-brand">{msg}</p>}
-          <button
-            onClick={handleAdd}
-            disabled={busy}
-            className="w-full rounded-xl bg-brand text-brand-ink py-3 font-bold hover:bg-brand-strong disabled:opacity-50"
-          >
-            {busy ? t("common_processing") : t("family_addButton")}
-          </button>
-        </div>
+        )}
 
         <div>
           <p className="font-bold text-sm mb-2">{t("family_listTitle", { n: dependents.length })}</p>
@@ -113,27 +192,54 @@ export default function FamilyPage() {
   );
 }
 
-function DependentRow({ dependent, onSaved }: { dependent: Member; onSaved: () => void }) {
+function EmergencyFields(p: {
+  name: string;
+  relation: string;
+  phone: string;
+  onName: (v: string) => void;
+  onRelation: (v: string) => void;
+  onPhone: (v: string) => void;
+  small?: boolean;
+}) {
   const { t } = useLiff();
+  return (
+    <fieldset className="rounded-xl border border-border p-3 space-y-2 min-w-0">
+      <legend className="px-1 text-xs text-muted">{t("family_ecHint")}</legend>
+      <div className="grid grid-cols-2 gap-2">
+        <TextInput value={p.name} onChange={p.onName} placeholder={t("register_ecName")} ariaLabel={t("register_ecName")} small={p.small} />
+        <ContactRelationSelect value={p.relation} onChange={p.onRelation} ariaLabel={t("register_ecRelation")} small={p.small} />
+      </div>
+      <TextInput type="tel" value={p.phone} onChange={p.onPhone} placeholder={t("register_ecPhone")} ariaLabel={t("register_ecPhone")} small={p.small} />
+    </fieldset>
+  );
+}
+
+function DependentRow({ dependent, onSaved }: { dependent: Member; onSaved: () => void }) {
+  const { t, locale } = useLiff();
   const initial = {
+    relation: dependent.relation ?? "",
     gender: dependent.gender ?? "",
     birthday: dependent.birthday ?? "",
     phone: dependent.phone ?? "",
     emergency_contact_name: dependent.emergency_contact_name ?? "",
+    emergency_contact_relation: dependent.emergency_contact_relation ?? "",
     emergency_contact_phone: dependent.emergency_contact_phone ?? "",
   };
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const dirty = (Object.keys(initial) as (keyof typeof initial)[]).some((k) => form[k] !== initial[k]);
+  const valid = !!form.relation && !!form.gender && !!form.birthday;
   const set = (k: keyof typeof initial) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   async function save() {
-    if (!form.gender || !form.birthday) return;
+    if (!valid) return;
     setBusy(true);
     try {
       await updateDependent(dependent.id, form);
       setSaved(true);
+      setEditing(false);
       onSaved();
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -141,70 +247,80 @@ function DependentRow({ dependent, onSaved }: { dependent: Member; onSaved: () =
     }
   }
 
+  const summary = [
+    dependent.gender ? t(`gender_${dependent.gender}`) : null,
+    dependent.birthday ? dependent.birthday.replaceAll("-", "/") : null,
+  ]
+    .filter(Boolean)
+    .join(locale === "en" ? " · " : "・");
+
   return (
-    <div className="bg-surface border border-border rounded-2xl p-4 space-y-2">
+    <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <p className="font-bold">{dependent.display_name}</p>
-        <span className="text-[11px] bg-brand/10 text-brand rounded-full px-2 py-0.5">
-          {t("family_relationChild")}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <GenderSelect value={form.gender} onChange={set("gender")} small />
-        <Input type="date" value={form.birthday} onChange={set("birthday")} max={todayInTaipei()} small />
-        <Input type="tel" value={form.phone} onChange={set("phone")} placeholder={t("family_phoneLabel")} small />
-        <Input value={form.emergency_contact_name} onChange={set("emergency_contact_name")} placeholder={t("family_ecName")} small />
-      </div>
-      <Input type="tel" value={form.emergency_contact_phone} onChange={set("emergency_contact_phone")} placeholder={t("family_ecPhone")} small />
-      {dirty && (
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-bold truncate">{dependent.display_name}</p>
+            {dependent.relation && (
+              <span className="shrink-0 text-[11px] bg-brand/10 text-brand rounded-full px-2 py-0.5">
+                {t(`relation_${dependent.relation}`)}
+              </span>
+            )}
+          </div>
+          {summary && <p className="text-xs text-muted mt-0.5">{summary}</p>}
+        </div>
+        {saved && <span className="text-xs text-brand">{t("family_saved")}</span>}
         <button
-          onClick={save}
-          disabled={busy || !form.gender || !form.birthday}
-          className="w-full text-sm text-brand border border-brand/30 rounded-lg py-2 disabled:opacity-50"
+          onClick={() => {
+            if (editing) setForm(initial);
+            setEditing((v) => !v);
+          }}
+          className="shrink-0 text-sm text-brand border border-brand/30 rounded-lg px-3 py-1"
         >
-          {busy ? t("common_saving") : t("family_saveButton")}
+          {editing ? t("family_close") : t("family_edit")}
         </button>
+      </div>
+
+      {editing && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label={t("family_relationLabel")} required invalid={!form.relation}>
+              <MemberRelationSelect value={form.relation} onChange={set("relation")} invalid={!form.relation} small />
+            </Field>
+            <Field label={t("family_genderLabel")} required invalid={!form.gender}>
+              <GenderSelect value={form.gender} onChange={set("gender")} invalid={!form.gender} small />
+            </Field>
+            <Field label={t("family_birthdayLabel")} required invalid={!form.birthday}>
+              <TextInput
+                type="date"
+                value={form.birthday}
+                onChange={set("birthday")}
+                max={todayInTaipei()}
+                invalid={!form.birthday}
+                small
+              />
+            </Field>
+            <Field label={t("family_phoneLabel")}>
+              <TextInput type="tel" value={form.phone} onChange={set("phone")} small />
+            </Field>
+          </div>
+          <EmergencyFields
+            name={form.emergency_contact_name}
+            relation={form.emergency_contact_relation}
+            phone={form.emergency_contact_phone}
+            onName={set("emergency_contact_name")}
+            onRelation={set("emergency_contact_relation")}
+            onPhone={set("emergency_contact_phone")}
+            small
+          />
+          <button
+            onClick={save}
+            disabled={busy || !dirty || !valid}
+            className="w-full text-sm font-bold bg-brand text-brand-ink rounded-lg py-2 disabled:opacity-40"
+          >
+            {busy ? t("common_saving") : t("family_saveButton")}
+          </button>
+        </>
       )}
-      {saved && <p className="text-xs text-brand">{t("family_saved")}</p>}
     </div>
-  );
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <span className="text-sm text-muted">{label}</span>
-      <div className="mt-1">{children}</div>
-      {hint && <p className="text-[11px] text-muted mt-1">{hint}</p>}
-    </div>
-  );
-}
-
-function Input({
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-  max,
-  small,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  placeholder?: string;
-  max?: string;
-  small?: boolean;
-}) {
-  return (
-    <input
-      type={type}
-      value={value}
-      max={max}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={`w-full border border-border bg-surface outline-none focus:border-brand ${
-        small ? "rounded-lg px-3 py-2 text-sm" : "rounded-xl px-4 py-3"
-      }`}
-    />
   );
 }

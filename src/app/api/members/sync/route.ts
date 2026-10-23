@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { syncMember, isProfileComplete } from "@/lib/server-db";
 import { verifyLineIdToken } from "@/lib/line-verify";
 import { setMemberCookie } from "@/lib/member-session";
+import { localeFromLanguage } from "@/lib/i18n";
 
 // 進站時呼叫：驗證 LINE 身分 → 確保會員存在 → 簽發 session cookie。
 //
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest) {
   const member = await syncMember({
     lineUserId: identity.userId,
     displayName: identity.name,
+    // 新會員依 LINE App 語言自動設定中/英（之後可在 App 右上角切換）
+    locale: typeof body.lang === "string" ? localeFromLanguage(body.lang) : undefined,
   });
 
   const res = NextResponse.json({

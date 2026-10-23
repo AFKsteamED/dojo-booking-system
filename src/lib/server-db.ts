@@ -73,11 +73,13 @@ export async function createDependent(
   guardianId: string,
   input: {
     display_name: string;
+    relation: string;
     gender: string;
     birthday: string;
     phone?: string | null;
     emergency_contact_name?: string | null;
     emergency_contact_phone?: string | null;
+    emergency_contact_relation?: string | null;
   }
 ): Promise<Member> {
   const supa = getServiceSupabase();
@@ -86,12 +88,14 @@ export async function createDependent(
     .insert({
       line_user_id: null,
       guardian_id: guardianId,
+      relation: input.relation,
       display_name: input.display_name.trim(),
       gender: input.gender,
       birthday: input.birthday,
       phone: input.phone?.trim() || null,
       emergency_contact_name: input.emergency_contact_name?.trim() || null,
       emergency_contact_phone: input.emergency_contact_phone?.trim() || null,
+      emergency_contact_relation: input.emergency_contact_relation || null,
       registered_at: new Date().toISOString(),
     })
     .select()
@@ -107,6 +111,8 @@ export async function createDependent(
 export async function syncMember(input: {
   lineUserId: string;
   displayName: string;
+  /** 只在首次建立會員時使用：依 LINE App 語言決定預設中/英 */
+  locale?: "zh" | "en";
 }): Promise<Member> {
   const supa = getServiceSupabase();
   const existing = await getMemberByLineId(input.lineUserId);
@@ -128,6 +134,7 @@ export async function syncMember(input: {
       line_user_id: input.lineUserId,
       line_display_name: input.displayName,
       display_name: "", // 尚未註冊，等學員在註冊頁填真實姓名
+      locale: input.locale ?? "zh",
     })
     .select()
     .single();

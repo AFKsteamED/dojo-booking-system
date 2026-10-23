@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { getSessionMember, getMemberById } from "@/lib/server-db";
-import { isGender, isValidBirthday, str } from "@/lib/profile";
+import { isGender, isMemberRelation, isContactRelation, isValidBirthday, str } from "@/lib/profile";
 
-// 編輯自己小孩的資料。只有該小孩的家長能改。
-// 姓名建立後鎖定（只有後台能改）；性別、生日、電話、緊急聯絡人可改。
+// 編輯自己代管成員的資料。只有該成員的帳號持有人能改。
+// 姓名建立後鎖定（只有後台能改）；其餘欄位可改。
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,14 +19,23 @@ export async function PATCH(
   }
 
   const b = await req.json().catch(() => ({}));
+  const bad = () => NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if ("relation" in b) {
+    if (!isMemberRelation(b.relation)) return bad();
+    update.relation = b.relation;
+  }
   if ("gender" in b) {
-    if (!isGender(b.gender)) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+    if (!isGender(b.gender)) return bad();
     update.gender = b.gender;
   }
   if ("birthday" in b) {
-    if (!isValidBirthday(b.birthday)) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+    if (!isValidBirthday(b.birthday)) return bad();
     update.birthday = b.birthday;
+  }
+  if ("emergency_contact_relation" in b) {
+    if (b.emergency_contact_relation && !isContactRelation(b.emergency_contact_relation)) return bad();
+    update.emergency_contact_relation = b.emergency_contact_relation || null;
   }
   if ("phone" in b) update.phone = str(b.phone) || null;
   if ("emergency_contact_name" in b) update.emergency_contact_name = str(b.emergency_contact_name) || null;

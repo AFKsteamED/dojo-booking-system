@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { getSessionMember, isProfileComplete } from "@/lib/server-db";
-import { isGender, isValidBirthday, str } from "@/lib/profile";
+import { isGender, isContactRelation, isValidBirthday, str } from "@/lib/profile";
 
 // 首次註冊：填寫真實資料。完成後姓名鎖定（之後只有後台能改）。
-// 必填：真實姓名、電話、性別、生日、緊急聯絡人（姓名+電話）；Email 選填。
+// 必填：真實姓名、電話、性別、生日、緊急聯絡人（姓名＋電話＋關係）；Email 選填。
 export async function POST(req: NextRequest) {
   const member = await getSessionMember();
   if (!member) return NextResponse.json({ error: "MEMBER_NOT_FOUND" }, { status: 401 });
@@ -19,7 +19,15 @@ export async function POST(req: NextRequest) {
   const ecName = str(b.emergency_contact_name);
   const ecPhone = str(b.emergency_contact_phone);
 
-  if (!displayName || !phone || !ecName || !ecPhone || !isGender(b.gender) || !isValidBirthday(b.birthday)) {
+  if (
+    !displayName ||
+    !phone ||
+    !ecName ||
+    !ecPhone ||
+    !isContactRelation(b.emergency_contact_relation) ||
+    !isGender(b.gender) ||
+    !isValidBirthday(b.birthday)
+  ) {
     return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
 
@@ -33,6 +41,7 @@ export async function POST(req: NextRequest) {
       birthday: b.birthday,
       emergency_contact_name: ecName,
       emergency_contact_phone: ecPhone,
+      emergency_contact_relation: b.emergency_contact_relation,
       email: str(b.email) || null,
       registered_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

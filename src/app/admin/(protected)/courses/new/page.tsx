@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminApi } from "@/lib/admin-api";
-import { toDateStr } from "@/lib/date-utils";
+import { todayInTaipei } from "@/lib/date-utils";
 
 type Coach = { id: string; name: string };
 type PickedMember = { id: string; display_name: string; phone: string | null };
@@ -19,10 +19,13 @@ export default function NewCoursePage() {
   const [title, setTitle] = useState("");
   const [coachId, setCoachId] = useState("");
   const [weekday, setWeekday] = useState(4); // 預設週四
-  const [sessionDate, setSessionDate] = useState(toDateStr(new Date()));
+  const [sessionDate, setSessionDate] = useState(todayInTaipei());
   const [startTime, setStartTime] = useState("19:00");
   const [endTime, setEndTime] = useState("20:30");
   const [capacity, setCapacity] = useState("6");
+  // null＝依類型預設（公開 4 人、私人 1 人）；手動改過就用改過的值
+  const [minAttInput, setMinAtt] = useState<string | null>(null);
+  const minAtt = minAttInput ?? (visibility === "private" ? "1" : "4");
   const [members, setMembers] = useState<PickedMember[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -33,6 +36,10 @@ export default function NewCoursePage() {
 
   async function submit() {
     if (!title.trim()) return setMsg("請填課名");
+    const cap = Number(capacity);
+    const min = Number(minAtt);
+    if (!Number.isInteger(cap) || cap < 1) return setMsg("人數上限需為 1 以上的整數");
+    if (!Number.isInteger(min) || min < 1 || min > cap) return setMsg("開班人數需介於 1 到人數上限之間");
     if (visibility === "private" && members.length === 0) {
       return setMsg("私人課請至少加入一位參與會員");
     }
@@ -44,7 +51,8 @@ export default function NewCoursePage() {
         recurrence,
         title: title.trim(),
         coach_id: coachId || null,
-        capacity: Number(capacity),
+        capacity: cap,
+        min_attendance: min,
         start_time: startTime,
         end_time: endTime,
         weekday: recurrence === "weekly" ? weekday : undefined,
@@ -115,14 +123,19 @@ export default function NewCoursePage() {
         </Field>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Field label="開始"><input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></Field>
         <Field label="結束"><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></Field>
-        <Field label="人數上限"><input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)}
+        <Field label="人數上限"><input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></Field>
+        <Field label="開班人數"><input type="number" min={1} value={minAtt} onChange={(e) => setMinAtt(e.target.value)}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></Field>
       </div>
+      <p className="text-xs text-gray-400 -mt-3">
+        開課前 3 小時截止預約；屆時人數未達「開班人數」會自動停課、退還堂數並以 LINE 通知已預約的學員。設為 1 即不會因人數不足停課。
+      </p>
 
       {visibility === "private" && (
         <Field label="參與名單（只有這些會員看得到並能預約）">

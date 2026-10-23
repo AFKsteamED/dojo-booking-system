@@ -43,7 +43,7 @@ export async function POST(
 
   const { error } = await supa
     .from("class_sessions")
-    .update({ status: "cancelled" })
+    .update({ status: "cancelled", cancel_reason: "manual", closed_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

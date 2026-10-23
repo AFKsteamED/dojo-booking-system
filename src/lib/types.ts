@@ -2,6 +2,10 @@
 
 export type Locale = "zh" | "en";
 export type Gender = "male" | "female" | "undisclosed";
+/** 緊急聯絡人與會員的關係 */
+export type ContactRelation = "father" | "mother" | "spouse" | "child" | "sibling" | "friend" | "other";
+/** 代訂成員與帳號持有人的關係 */
+export type MemberRelation = "child" | "spouse" | "parent" | "sibling" | "friend" | "other";
 
 export type Member = {
   id: string;
@@ -14,9 +18,11 @@ export type Member = {
   birthday: string | null; // YYYY-MM-DD
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  emergency_contact_relation: ContactRelation | null;
   registered_at: string | null; // 完成註冊時間；非 null 代表姓名已鎖定
   locale: Locale;
-  guardian_id: string | null; // 非 null = 這是某位家長底下的小孩
+  guardian_id: string | null; // 非 null = 這是某位帳號持有人代為管理的成員（家人/朋友）
+  relation: MemberRelation | null; // 代訂成員與帳號持有人的關係
   created_at: string;
   updated_at: string;
 };
@@ -41,6 +47,9 @@ export type ClassSession = {
   capacity: number;
   status: "scheduled" | "cancelled";
   visibility: Visibility;
+  min_attendance: number; // 最低開班人數
+  cancel_reason: "manual" | "insufficient" | null;
+  closed_at: string | null; // 系統已在截止時間處理過
 };
 
 export type CreditWallet = {
@@ -73,4 +82,5 @@ export type SessionWithCounts = ClassSession & {
   coach_name: string | null;
   booked_count: number;
   remaining: number; // capacity - booked_count
+  household_booked?: boolean; // 我或我代管的成員有預約這堂
 };

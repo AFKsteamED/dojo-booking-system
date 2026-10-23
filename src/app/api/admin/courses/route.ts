@@ -19,8 +19,20 @@ export async function POST(req: NextRequest) {
   const visibility = b.visibility === "private" ? "private" : "public";
   const capacity = Number(b.capacity);
   const memberIds: string[] = Array.isArray(b.member_ids) ? b.member_ids : [];
+  // 最低開班人數：未填時公開課 4 人、私人課 1 人
+  const minAttendance =
+    b.min_attendance !== undefined && b.min_attendance !== "" ? Number(b.min_attendance) : visibility === "private" ? 1 : 4;
 
-  if (!b.title?.trim() || !b.start_time || !b.end_time || !Number.isInteger(capacity) || capacity <= 0) {
+  if (
+    !b.title?.trim() ||
+    !b.start_time ||
+    !b.end_time ||
+    !Number.isInteger(capacity) ||
+    capacity <= 0 ||
+    !Number.isInteger(minAttendance) ||
+    minAttendance < 1 ||
+    minAttendance > capacity
+  ) {
     return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
 
@@ -40,6 +52,7 @@ export async function POST(req: NextRequest) {
         start_time: b.start_time,
         end_time: b.end_time,
         capacity,
+        min_attendance: minAttendance,
         visibility,
         active: true,
       })
@@ -71,6 +84,7 @@ export async function POST(req: NextRequest) {
       start_time: b.start_time,
       end_time: b.end_time,
       capacity,
+      min_attendance: minAttendance,
       visibility,
       status: "scheduled",
     })

@@ -12,13 +12,14 @@ async function jsonOrThrow(res: Response) {
 }
 
 // 進站同步：真身分帶 idToken；開發假身分帶 mock:true
-export async function syncMember(input: { idToken: string | null }) {
+export async function syncMember(input: { idToken: string | null; lang?: string | null }) {
   const res = await fetch("/api/members/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      input.idToken ? { idToken: input.idToken } : { mock: true }
-    ),
+    body: JSON.stringify({
+      ...(input.idToken ? { idToken: input.idToken } : { mock: true }),
+      lang: input.lang ?? undefined,
+    }),
   });
   return jsonOrThrow(res) as Promise<{ member: Member; profileComplete: boolean }>;
 }
@@ -30,6 +31,7 @@ export type RegisterInput = {
   birthday: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
+  emergency_contact_relation: string;
   email?: string;
 };
 
@@ -49,6 +51,7 @@ export async function updateProfile(input: {
   birthday?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
   email?: string;
 }) {
   const res = await fetch("/api/members/me", {
@@ -76,11 +79,13 @@ export async function getHousehold() {
 
 export type DependentInput = {
   display_name: string;
+  relation: string;
   gender: string;
   birthday: string;
   phone?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
 };
 
 export async function addDependent(input: DependentInput) {
@@ -146,6 +151,7 @@ export type MyBooking = {
   start_time: string;
   end_time: string;
   startMs: number;
+  sessionCancelled: boolean;
 };
 
 export async function getMyBookings(scope: "upcoming" | "past", memberId?: string) {
