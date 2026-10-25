@@ -16,31 +16,37 @@ export async function GET(req: NextRequest) {
   }
 
   const supa = getServiceSupabase();
-  const { data: sessions, error } = await supa
-    .from("class_sessions")
-    .select("*, coach:coaches(name)")
-    .gte("session_date", from)
-    .lte("session_date", to)
-    .order("session_date", { ascending: true })
-    .order("start_time", { ascending: true });
+  // 課程與「我是誰＋我的代管成員」同時查，不互相等待
+  const [{ data: sessions, error }, viewer] = await Promise.all([
+    supa
+      .from("class_sessions")
+      .select("*, coach:coaches(name)")
+      .gte("session_date", from)
+      .lte("session_date", to)
+      .order("session_date", { ascending: true })
+      .order("start_time", { ascending: true }),
+    getViewer(),
+  ]);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const member = await getSessionMember();
-  const household = member ? [member.id, ...(await getDependents(member.id)).map((d) => d.id)] : [];
-  const eligible = await getEligibleSetsUnion(household);
+  // 私人課資格、人數、我家有沒有預約：三個查詢同時進行
+  const all = sessions ?? [];
+  const allIds = all.map((s) => s.id as string);
+  const [eligible, counts, mine] = await Promise.all([
+    getEligibleSetsUnion(viewer.household),
+    countBookings(allIds),
+    householdBooked(allIds, viewer.household),
+  ]);
 
-  const visible = (sessions ?? []).filter((s) =>
+  const visible = all.filter((s) =>
     canSeePrivate(
       { visibility: s.visibility as string, template_id: s.template_id as string | null, id: s.id as string },
       eligible
     )
   );
-
-  const ids = visible.map((s) => s.id as string);
-  const [counts, mine] = await Promise.all([countBookings(ids), householdBooked(ids, household)]);
 
   const result = visible.map((s) => {
     const booked = counts[s.id as string] ?? 0;
@@ -53,7 +59,15 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ sessions: result });
+  // viewer：這份結果是以哪位會員的身分查的（前端用來判斷預先載入的資料是否可直接使用）
+  return NextResponse.json({ sessions: result, viewer: viewer.memberId });
+}
+
+async function getViewer(): Promise<{ memberId: string | null; household: string[] }> {
+  const member = await getSessionMember();
+  if (!member) return { memberId: null, household: [] };
+  const dependents = await getDependents(member.id);
+  return { memberId: member.id, household: [member.id, ...dependents.map((d) => d.id)] };
 }
 
 async function countBookings(sessionIds: string[]): Promise<Record<string, number>> {

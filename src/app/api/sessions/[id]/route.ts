@@ -33,20 +33,49 @@ export async function GET(
 ) {
   const { id } = await params;
   const supa = getServiceSupabase();
-  const { data: session, error } = await supa
-    .from("class_sessions")
-    .select("*, coach:coaches(name)")
-    .eq("id", id)
-    .maybeSingle();
+  // 場次與「我＋代管成員」同時查
+  const [{ data: session, error }, household] = await Promise.all([
+    supa.from("class_sessions").select("*, coach:coaches(name)").eq("id", id).maybeSingle(),
+    getHousehold(),
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!session) return NextResponse.json({ error: "SESSION_NOT_FOUND" }, { status: 404 });
 
-  const member = await getSessionMember();
-  const dependents = member ? await getDependents(member.id) : [];
-  const household: Member[] = member ? [member, ...dependents] : [];
+  const walletType = session.visibility === "private" ? "private" : "group";
 
-  const eligibleSets = await Promise.all(household.map((m) => getEligibleSets(m.id)));
+  // 私人課資格、名單、每位成員的預約與堂數：全部同時查
+  const [eligibleSets, { data: roster }, perMember] = await Promise.all([
+    Promise.all(household.map((m) => getEligibleSets(m.id))),
+    // 名單（只取姓名並遮罩保護隱私；後台看名單不受影響）
+    supa
+      .from("bookings")
+      .select("member:members(display_name)")
+      .eq("session_id", id)
+      .in("status", ACTIVE)
+      .order("created_at", { ascending: true }),
+    Promise.all(
+      household.map((m) =>
+        Promise.all([
+          supa
+            .from("bookings")
+            .select("id")
+            .eq("session_id", id)
+            .eq("member_id", m.id)
+            .in("status", ACTIVE)
+            .limit(1),
+          supa
+            .from("credit_wallets")
+            .select("remaining_credits")
+            .eq("member_id", m.id)
+            .eq("type", walletType)
+            .lte("valid_from", session.session_date)
+            .gte("valid_to", session.session_date),
+        ])
+      )
+    ),
+  ]);
+
   const eligibleFlags = household.map((_m, i) =>
     canSeePrivate(
       { visibility: session.visibility as string, template_id: session.template_id as string | null, id: session.id as string },
@@ -59,55 +88,26 @@ export async function GET(
     return NextResponse.json({ error: "NOT_ELIGIBLE" }, { status: 403 });
   }
 
-  const walletType = session.visibility === "private" ? "private" : "group";
-
-  // 名單（只取暱稱，遮罩保護隱私；後台看名單不受影響）
-  const { data: roster } = await supa
-    .from("bookings")
-    .select("member:members(display_name)")
-    .eq("session_id", id)
-    .in("status", ACTIVE)
-    .order("created_at", { ascending: true });
   const names = (roster ?? []).map((r) =>
     maskName(relOne<{ display_name: string }>(r.member)?.display_name ?? "會員")
   );
 
   // 每位成員各自的預約狀態（本人 + 代管成員）
-  const people: SessionPerson[] = await Promise.all(
-    household.map(async (m, i) => {
-      const [{ data: mine }, { data: wallets }] = await Promise.all([
-        supa
-          .from("bookings")
-          .select("id")
-          .eq("session_id", id)
-          .eq("member_id", m.id)
-          .in("status", ACTIVE)
-          .limit(1),
-        supa
-          .from("credit_wallets")
-          .select("remaining_credits")
-          .eq("member_id", m.id)
-          .eq("type", walletType)
-          .lte("valid_from", session.session_date)
-          .gte("valid_to", session.session_date),
-      ]);
-      const credits = (wallets ?? []).reduce(
-        (sum, w) => sum + (w.remaining_credits as number),
-        0
-      );
-      return {
-        memberId: m.id,
-        displayName: m.display_name,
-        relation: m.guardian_id ? "member" : "self",
-        memberRelation: m.relation,
-        alreadyBooked: !!mine?.[0],
-        bookingId: mine?.[0]?.id ?? null,
-        eligible: eligibleFlags[i],
-        profileComplete: isProfileComplete(m),
-        credits,
-      };
-    })
-  );
+  const people: SessionPerson[] = household.map((m, i) => {
+    const [{ data: mine }, { data: wallets }] = perMember[i];
+    const credits = (wallets ?? []).reduce((sum, w) => sum + (w.remaining_credits as number), 0);
+    return {
+      memberId: m.id,
+      displayName: m.display_name,
+      relation: m.guardian_id ? "member" : "self",
+      memberRelation: m.relation,
+      alreadyBooked: !!mine?.[0],
+      bookingId: mine?.[0]?.id ?? null,
+      eligible: eligibleFlags[i],
+      profileComplete: isProfileComplete(m),
+      credits,
+    };
+  });
 
   const booked = names.length;
   return NextResponse.json({
@@ -120,4 +120,10 @@ export async function GET(
     roster: names,
     people,
   });
+}
+
+async function getHousehold(): Promise<Member[]> {
+  const member = await getSessionMember();
+  if (!member) return [];
+  return [member, ...(await getDependents(member.id))];
 }

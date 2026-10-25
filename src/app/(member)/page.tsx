@@ -5,33 +5,37 @@ import Link from "next/link";
 import { getSessions } from "@/lib/client-api";
 import { Wordmark } from "@/components/wordmark";
 import { useLiff } from "@/components/liff-provider";
-import { weekdayLabel, hhmm, todayInTaipei, addDaysStr } from "@/lib/date-utils";
+import { weekdayLabel, hhmm } from "@/lib/date-utils";
+import { scheduleDays, takePrefetchedSchedule } from "@/lib/schedule-prefetch";
 import { sessionState, type SessionState } from "@/lib/session-status";
 import { useNow } from "@/lib/use-now";
 import type { SessionWithCounts } from "@/lib/types";
 
-const DAYS = 21;
-
 export default function SchedulePage() {
-  const { t, locale } = useLiff();
-  const [days] = useState(() => {
-    const today = todayInTaipei();
-    return Array.from({ length: DAYS }, (_, i) => addDaysStr(today, i));
-  });
+  const { t, locale, member } = useLiff();
+  const memberId = member?.id ?? null;
+  const [days] = useState(scheduleDays);
   const [selected, setSelected] = useState(days[0]);
   const [all, setAll] = useState<SessionWithCounts[] | null>(null);
 
   // 一次載入三週課表，切換日期只在前端篩選：
-  // 不會因為連點日期、舊的回應較晚回來而閃現別天的課程
+  // 不會因為連點日期、舊的回應較晚回來而閃現別天的課程。
+  // 開啟 App 時已預先載入（見 schedule-prefetch.ts）；是以本人身分查的才直接用，否則重新抓。
   useEffect(() => {
     let cancelled = false;
-    getSessions(days[0], days[days.length - 1])
-      .then((s) => !cancelled && setAll(s))
+    const [from, to] = [days[0], days[days.length - 1]];
+    const fresh = () => getSessions(from, to);
+    const prefetched = takePrefetchedSchedule(from, to);
+    const load = prefetched
+      ? prefetched.then((r) => (r.viewer === memberId ? r : fresh()), fresh)
+      : fresh();
+    load
+      .then((r) => !cancelled && setAll(r.sessions))
       .catch(() => !cancelled && setAll([]));
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [days, memberId]);
 
   const byDate = useMemo(() => {
     const m = new Map<string, SessionWithCounts[]>();

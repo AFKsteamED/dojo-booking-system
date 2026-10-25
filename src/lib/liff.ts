@@ -76,14 +76,19 @@ export async function initLiff(): Promise<LiffState> {
     return new Promise<LiffState>(() => {});
   }
 
-  const p = await liff.getProfile();
+  // 名字、頭像直接從 ID Token 讀（本機解碼，不必再連 LINE 一次）；
+  // 少數情況拿不到才退回 getProfile()。身分真偽仍由後端驗證，這裡只用來顯示。
+  const decoded = liff.getDecodedIDToken();
+  const profile: LiffProfile = decoded?.sub
+    ? { userId: decoded.sub, displayName: decoded.name ?? "", pictureUrl: decoded.picture }
+    : await liff.getProfile().then((p) => ({
+        userId: p.userId,
+        displayName: p.displayName,
+        pictureUrl: p.pictureUrl,
+        statusMessage: p.statusMessage,
+      }));
   return {
-    profile: {
-      userId: p.userId,
-      displayName: p.displayName,
-      pictureUrl: p.pictureUrl,
-      statusMessage: p.statusMessage,
-    },
+    profile,
     isMock: false,
     idToken: liff.getIDToken(),
     lang: liff.getAppLanguage?.() ?? navigator.language ?? null,

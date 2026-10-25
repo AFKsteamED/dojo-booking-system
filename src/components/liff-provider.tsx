@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { initLiff, type LiffProfile } from "@/lib/liff";
 import { syncMember, getHousehold, setLocale as apiSetLocale } from "@/lib/client-api";
 import { t as translate, type Locale, type DictKey } from "@/lib/i18n";
+import { prefetchSchedule } from "@/lib/schedule-prefetch";
 import type { Member } from "@/lib/types";
 
 type LiffContextValue = {
@@ -71,6 +72,8 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // 要進課表頁時，趁 LINE 初始化、登入同步的空檔先抓課表（回訪會員可直接使用）
+    if (isOpeningSchedule()) prefetchSchedule();
     (async () => {
       try {
         const { profile, isMock, idToken, lang } = await initLiff();
@@ -79,18 +82,14 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
         setIsMock(isMock);
         // 用 LINE 身分驗證（或開發假身分）同步會員並取得 session；
         // 新會員依 LINE App 語言自動預設中/英
-        const { member, profileComplete } = await syncMember({ idToken, lang });
+        // 同步時一併帶回代管成員，不必再查一次
+        const { member, profileComplete, dependents } = await syncMember({ idToken, lang });
         if (cancelled) return;
         setMemberState(member);
         setProfileComplete(profileComplete);
+        setDependents(dependents ?? []);
         if (member.locale) setLocaleState(member.locale);
         setLoading(false);
-        // 家人清單非同步補載，不擋主流程
-        getHousehold()
-          .then((d) => {
-            if (!cancelled) setDependents(d.dependents);
-          })
-          .catch(() => {});
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "初始化失敗");
@@ -107,13 +106,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
     [locale]
   );
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-muted text-sm">載入中… Loading…</p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingSkeleton />;
 
   if (error) {
     return (
@@ -142,5 +135,36 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
     </LiffContext.Provider>
+  );
+}
+
+// 直接開課表（含 LINE 圖文選單的預設入口）才預先載入；
+// 從 LIFF 深層連結進來（?liff.state=/bookings 等）會被導到別頁，就不必抓。
+function isOpeningSchedule(): boolean {
+  if (typeof window === "undefined" || window.location.pathname !== "/") return false;
+  const target = new URLSearchParams(window.location.search).get("liff.state");
+  return !target || target === "/" || target.startsWith("/?");
+}
+
+// 載入中先畫出課表的骨架，讓畫面不是一片空白
+function LoadingSkeleton() {
+  return (
+    <div className="flex-1 flex flex-col animate-pulse" aria-busy="true">
+      <span className="sr-only">載入中… Loading…</span>
+      <div className="px-4 pt-5 pb-3 space-y-2">
+        <div className="h-3 w-24 rounded bg-brand/15" />
+        <div className="h-7 w-36 rounded bg-gray-200" />
+      </div>
+      <div className="flex gap-2 px-4 pb-3 overflow-hidden">
+        {Array.from({ length: 7 }, (_, i) => (
+          <div key={i} className="shrink-0 w-12 h-[60px] rounded-xl bg-surface border border-border" />
+        ))}
+      </div>
+      <div className="px-4 py-2 space-y-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="h-[92px] rounded-2xl bg-surface border border-border" />
+        ))}
+      </div>
+    </div>
   );
 }

@@ -21,7 +21,7 @@ export async function syncMember(input: { idToken: string | null; lang?: string 
       lang: input.lang ?? undefined,
     }),
   });
-  return jsonOrThrow(res) as Promise<{ member: Member; profileComplete: boolean }>;
+  return jsonOrThrow(res) as Promise<{ member: Member; profileComplete: boolean; dependents: Member[] }>;
 }
 
 export type RegisterInput = {
@@ -107,10 +107,10 @@ export async function updateDependent(id: string, input: Partial<Omit<DependentI
   return jsonOrThrow(res) as Promise<{ dependent: Member }>;
 }
 
+// viewer：這份結果是以哪位會員的身分查的（未登入時為 null）
 export async function getSessions(from: string, to: string) {
   const res = await fetch(`/api/sessions?from=${from}&to=${to}`);
-  const data = await jsonOrThrow(res);
-  return data.sessions as SessionWithCounts[];
+  return jsonOrThrow(res) as Promise<{ sessions: SessionWithCounts[]; viewer: string | null }>;
 }
 
 export async function getSessionDetail(id: string) {
