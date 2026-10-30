@@ -281,18 +281,7 @@ export default function AdminMemberDetail({
         <div className="space-y-2">
           {wallets.length === 0 && <p className="text-sm text-gray-400">尚無堂數</p>}
           {wallets.map((w) => (
-            <div key={w.id} className="bg-white border border-gray-200 rounded-xl p-3 text-sm">
-              <div className="flex justify-between">
-                <span>{w.type === "group" ? "團體" : "私人"}課程</span>
-                <span className="font-bold text-brand">
-                  剩 {w.remaining_credits} / {w.total_credits} 堂
-                </span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                {w.valid_from} ~ {w.valid_to}
-                {w.note ? ` · ${w.note}` : ""}
-              </p>
-            </div>
+            <WalletCard key={w.id} w={w} onChanged={load} />
           ))}
         </div>
       </div>
@@ -316,6 +305,152 @@ export default function AdminMemberDetail({
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// 一筆堂數錢包：顯示＋修改（總堂數、剩餘、有效期間、備註）＋刪除（限未被使用過的）
+function WalletCard({ w, onChanged }: { w: CreditWallet; onChanged: () => void }) {
+  const initial = {
+    total: String(w.total_credits),
+    remaining: String(w.remaining_credits),
+    valid_from: w.valid_from,
+    valid_to: w.valid_to,
+    note: w.note ?? "",
+  };
+  const [editing, setEditing] = useState(false);
+  const [f, setF] = useState(initial);
+  // 已使用堂數（總 − 剩餘）。改總堂數時以它推算剩餘，不受輸入途中的暫時數字影響
+  const [usedLock, setUsedLock] = useState(w.total_credits - w.remaining_credits);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const today = todayInTaipei();
+  const status =
+    w.valid_to < today ? "已過期" : w.valid_from > today ? "尚未生效" : null;
+  const used = Number(f.total) - Number(f.remaining);
+
+  // 改總堂數時，剩餘跟著增減（已使用的堂數不變）；剩餘仍可再單獨調整
+  function setTotal(v: string) {
+    const t = Number(v);
+    setF((prev) => ({
+      ...prev,
+      total: v,
+      remaining: v !== "" && Number.isInteger(t) ? String(Math.max(0, t - usedLock)) : prev.remaining,
+    }));
+  }
+  function setRemaining(v: string) {
+    setF((prev) => ({ ...prev, remaining: v }));
+    const t = Number(f.total);
+    const r = Number(v);
+    if (v !== "" && Number.isInteger(t) && Number.isInteger(r)) setUsedLock(t - r);
+  }
+
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await adminApi.updateWallet(w.id, {
+        total_credits: Number(f.total),
+        remaining_credits: Number(f.remaining),
+        valid_from: f.valid_from,
+        valid_to: f.valid_to,
+        note: f.note,
+      });
+      setEditing(false);
+      onChanged();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "儲存失敗");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm(`確定刪除這筆${w.type === "group" ? "團體" : "私人"}堂數（${w.total_credits} 堂）？刪除後無法復原。`)) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await adminApi.deleteWallet(w.id);
+      onChanged();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "刪除失敗");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`bg-white border border-gray-200 rounded-xl p-3 text-sm ${status === "已過期" && !editing ? "opacity-60" : ""}`}>
+      <div className="flex justify-between items-center gap-2">
+        <span className="flex items-center gap-1.5">
+          {w.type === "group" ? "團體" : "私人"}課程
+          {status && (
+            <span className="text-[11px] bg-gray-100 text-gray-500 rounded-full px-1.5 py-0.5">{status}</span>
+          )}
+        </span>
+        <span className="font-bold text-brand">
+          剩 {w.remaining_credits} / {w.total_credits} 堂
+        </span>
+      </div>
+      <div className="flex justify-between items-center gap-2 mt-1">
+        <p className="text-xs text-gray-400 min-w-0">
+          {w.valid_from} ~ {w.valid_to}
+          {w.note ? ` · ${w.note}` : ""}
+        </p>
+        {!editing && (
+          <div className="flex gap-3 shrink-0 text-xs">
+            <button
+              onClick={() => {
+                setF(initial);
+                setUsedLock(w.total_credits - w.remaining_credits);
+                setErr(null);
+                setEditing(true);
+              }}
+              className="text-brand"
+            >
+              修改
+            </button>
+            <button onClick={remove} disabled={busy} className="text-accent disabled:opacity-50">
+              刪除
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="總堂數" type="number" value={f.total} onChange={setTotal} />
+            <Field label="剩餘堂數" type="number" value={f.remaining} onChange={setRemaining} />
+            <Field label="有效起" type="date" value={f.valid_from} onChange={(v) => setF({ ...f, valid_from: v })} />
+            <Field label="有效迄" type="date" value={f.valid_to} onChange={(v) => setF({ ...f, valid_to: v })} />
+          </div>
+          <Field label="備註" value={f.note} onChange={(v) => setF({ ...f, note: v })} placeholder="例：補登 1 堂、延期一個月" />
+          <p className="text-[11px] text-gray-400">
+            已使用 {Number.isFinite(used) ? used : "—"} 堂（含尚未上課的預約）。修改總堂數時，剩餘會跟著增減；學員端會立即看到新的堂數。
+          </p>
+          {err && <p className="text-xs text-accent">{err}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setEditing(false);
+                setErr(null);
+              }}
+              className="flex-1 border border-gray-200 text-gray-500 rounded-lg py-2"
+            >
+              取消
+            </button>
+            <button
+              onClick={save}
+              disabled={busy}
+              className="flex-[2] bg-brand text-white rounded-lg py-2 font-medium disabled:opacity-50"
+            >
+              {busy ? "儲存中…" : "儲存"}
+            </button>
+          </div>
+        </div>
+      )}
+      {!editing && err && <p className="text-xs text-accent mt-2">{err}</p>}
     </div>
   );
 }

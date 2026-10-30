@@ -1,7 +1,8 @@
 // 後台前端呼叫工具
 async function j(res: Response) {
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error ?? "FAILED"), { code: data.error });
+  // message：後端給的中文說明（有的話），可直接顯示給教練
+  if (!res.ok) throw Object.assign(new Error(data.message ?? data.error ?? "FAILED"), { code: data.error });
   return data;
 }
 
@@ -46,6 +47,21 @@ export const adminApi = {
         body: JSON.stringify(body),
       })
     );
+  },
+  async updateWallet(
+    id: string,
+    body: { total_credits: number; remaining_credits: number; valid_from: string; valid_to: string; note: string }
+  ) {
+    return j(
+      await fetch(`/api/admin/wallets/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    );
+  },
+  async deleteWallet(id: string) {
+    return j(await fetch(`/api/admin/wallets/${id}`, { method: "DELETE" }));
   },
   async templates() {
     return j(await fetch(`/api/admin/templates`));
