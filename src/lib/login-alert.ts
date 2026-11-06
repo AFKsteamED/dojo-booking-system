@@ -14,6 +14,18 @@ const TW_REGION: Record<string, string> = {
   TTT: "臺東縣", PEN: "澎湖縣", KIN: "金門縣", LIE: "連江縣",
 };
 
+// 縣市代碼對不上時，改用英文城市名對照（Vercel 對台灣常只給城市名，例如 Hsinchu）
+const TW_CITY: [string, string][] = [
+  ["New Taipei", "新北市"], ["Banqiao", "新北市"], ["Xinzhuang", "新北市"], ["Zhonghe", "新北市"],
+  ["Sanchong", "新北市"], ["Xindian", "新北市"], ["Taipei", "臺北市"], ["Taoyuan", "桃園市"],
+  ["Zhongli", "桃園市"], ["Taichung", "臺中市"], ["Tainan", "臺南市"], ["Kaohsiung", "高雄市"],
+  ["Keelung", "基隆市"], ["Zhubei", "新竹縣"], ["Hsinchu", "新竹"], ["Miaoli", "苗栗縣"],
+  ["Changhua", "彰化縣"], ["Nantou", "南投縣"], ["Douliu", "雲林縣"], ["Yunlin", "雲林縣"],
+  ["Chiayi", "嘉義"], ["Pingtung", "屏東縣"], ["Yilan", "宜蘭縣"], ["Luodong", "宜蘭縣"],
+  ["Hualien", "花蓮縣"], ["Taitung", "臺東縣"], ["Magong", "澎湖縣"], ["Penghu", "澎湖縣"],
+  ["Kinmen", "金門縣"], ["Matsu", "連江縣"], ["Nangan", "連江縣"],
+];
+
 export type LockContext = { ip: string; location: string; device: string };
 
 // 依 Vercel 附上的 IP 地理標頭推估位置：只到縣市，手機網路與 VPN 可能不準
@@ -26,7 +38,8 @@ function approxLocation(req: NextRequest): string {
     city = decodeURIComponent(req.headers.get("x-vercel-ip-city") ?? "");
   } catch {}
   const countryName = new Intl.DisplayNames(["zh-TW"], { type: "region" }).of(country) ?? country;
-  const place = (country === "TW" && TW_REGION[region]) || city || region;
+  const twCity = country === "TW" ? TW_CITY.find(([en]) => city.startsWith(en))?.[1] : undefined;
+  const place = (country === "TW" && (TW_REGION[region] || twCity)) || city || region;
   return place ? `${place}，${countryName}` : countryName;
 }
 
