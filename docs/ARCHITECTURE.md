@@ -120,6 +120,8 @@ src/
 ### 3.2 後台身分
 - 一組共用密碼 `ADMIN_PASSWORD`，登入後設定簽章 cookie `admin_session`（HMAC，使用 `ADMIN_SESSION_SECRET`）。
 - 每個 admin API 開頭都呼叫 `guardAdmin()`；`(protected)/layout.tsx` 未登入時導向 `/admin/login`。
+- **防暴力破解**：同一個 IP（取自 Vercel 覆寫的 `x-real-ip`）連續輸錯 3 次鎖定 15 分鐘，期間連正確密碼也拒絕。`admin_login_attempt()` 在比對密碼**之前**原子地扣一次嘗試機會，大量同時送出的請求也只會比對 3 次；資料庫無法使用時拒絕登入（fail-closed）。以 IP 為單位而非全站鎖定，避免他人故意輸錯把教練鎖在門外。
+- **鎖定警示**：觸發鎖定時記錄到 `admin_login_alerts`（IP、依 Vercel 地理標頭推估的縣市、裝置），並以 LINE 推播給 `ADMIN_ALERT_LINE_USER_ID`；24 小時內最多通知 5 則，避免被換 IP 洗版。教練自己被鎖住時，可在 SQL Editor 執行 `delete from admin_login_guard;` 立即解除。
 
 ### 3.3 資料庫
 - 所有資料表都**開啟 RLS 而且沒有任何 policy**，前端無法直接存取資料庫。
@@ -232,7 +234,7 @@ sequenceDiagram
 ### 後台（`guardAdmin()`）
 | Method & Path | 用途 |
 |---|---|
-| `POST /api/admin/login` / `logout` | 登入、登出 |
+| `GET/POST /api/admin/login`、`POST .../logout` | 查詢是否鎖定、登入（連續輸錯 3 次鎖定 15 分鐘）、登出 |
 | `GET /api/admin/sessions/upcoming?days=7` | 今天起 N 天的場次（含有效人數） |
 | `GET /api/admin/sessions/past?offset&limit` | 已開班的過去場次＋出席統計 |
 | `GET /api/admin/sessions/[id]` | 名單（含關係、代訂人、LINE 暱稱） |
@@ -272,6 +274,7 @@ sequenceDiagram
 | `LINE_CHANNEL_ACCESS_TOKEN` | Messaging API 推播 | Vercel |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | 資料庫 | Vercel、`.env.local` |
 | `ADMIN_PASSWORD` / `ADMIN_SESSION_SECRET` | 後台登入 | Vercel、`.env.local` |
+| `ADMIN_ALERT_LINE_USER_ID` | 後台登入被鎖定時的 LINE 通知對象（管理者的 LINE User ID） | Vercel |
 | `CRON_SECRET` | 排程端點驗證（Supabase `db/08` 也使用相同的值） | Vercel |
 | `NEXT_PUBLIC_LIFF_MOCK` | 開發時強制使用假身分（正式環境**不要設**） | 只在本機 |
 
@@ -294,6 +297,7 @@ sequenceDiagram
 | `07_attendance_relations.sql` | 關係欄位、`min_attendance`、`cancel_reason`、`closed_at`、`BOOKING_CLOSED`、`close_session()` |
 | `08_cron_close_sessions.sql` | 開啟 pg_cron／pg_net，每 10 分鐘呼叫 close-sessions |
 | `09_cron_extend_sessions.sql` | `generate_sessions` 改以台北日期為起點；pg_cron 每天台北 03:00 補足未來 8 週場次 |
+| `10_admin_login_lock.sql` | 後台登入防暴力破解：`admin_login_guard`、`admin_login_attempt()`；鎖定警示紀錄 `admin_login_alerts`、`admin_login_record_alert()` |
 
 - `04_seed.sql` 含開發用的測試會員 `U_dev_mock_0001`；新建正式環境時，教練與課程請改成實際資料。
 - `08_cron_close_sessions.sql` 中的 `<CRON_SECRET>` 執行前要換成與 Vercel 相同的值（repo 內只保留佔位符）。
