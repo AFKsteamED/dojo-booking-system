@@ -260,6 +260,8 @@ flowchart LR
 | 排程 | Supabase pg_cron（每 10 分鐘截止檢查）、Vercel Cron（每晚提醒） |
 | 部署 | GitHub → Vercel 自動部署；函式與資料庫同在新加坡區域 |
 
+更完整的資料表欄位、API 一覽與商業規則，請見 [技術文件](docs/ARCHITECTURE.md)。
+
 <details>
 <summary><b>資料模型</b></summary>
 
@@ -334,8 +336,8 @@ npm run dev                        # http://localhost:3000
 
 - 在 `localhost` 開啟時會自動使用開發用的假身分，不必進 LINE 也能開發會員端
 - 教練後台位於 `/admin`
-- 資料庫請依序在 Supabase SQL Editor 執行 `db/01` 至 `db/08`，詳見 [`db/README.md`](db/README.md)
-- 部署流程請見 [`DEPLOY.md`](DEPLOY.md)
+- 資料庫請依序在 Supabase SQL Editor 執行 `db/01` 至 `db/08`
+- 資料庫、API、部署與 LINE 設定的完整說明，請見 [技術文件](docs/ARCHITECTURE.md)
 
 ---
 

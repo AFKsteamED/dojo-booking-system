@@ -24,12 +24,6 @@
 .DS_Store
 *.pem
 
-# 參考截圖（私人資料，不進版控）
-/TNT_reference
-
-# Claude Code 本機個人設定
-.claude/settings.local.json
-
 # debug
 npm-debug.log*
 yarn-debug.log*

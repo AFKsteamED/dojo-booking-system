@@ -140,18 +140,6 @@ export const adminApi = {
   async upcoming(days = 7) {
     return j(await fetch(`/api/admin/sessions/upcoming?days=${days}`));
   },
-  async generateSessions(weeks: number) {
-    return j(
-      await fetch(`/api/admin/generate-sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weeks }),
-      })
-    );
-  },
-  async sessions(date: string) {
-    return j(await fetch(`/api/admin/sessions?date=${date}`));
-  },
   async session(id: string) {
     return j(await fetch(`/api/admin/sessions/${id}`));
   },
