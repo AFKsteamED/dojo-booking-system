@@ -42,7 +42,7 @@ export default function AdminSchedulePage() {
   async function cancelSession(s: AdminSession) {
     const msg =
       s.booked_count > 0
-        ? `確定將「${s.title}」停課？\n已預約的 ${s.booked_count} 位學員將自動退還堂數。`
+        ? `確定將「${s.title}」停課？\n已預約的 ${s.booked_count} 位學員將自動退還堂數，並收到 LINE 停課通知。`
         : `確定將「${s.title}」停課？`;
     if (!confirm(msg)) return;
     await adminApi.cancelSession(s.id);

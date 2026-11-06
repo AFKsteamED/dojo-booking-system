@@ -208,6 +208,10 @@ const dict = {
     notify_reminder: "⏰ 明日課程提醒",
     notify_insufficientTitle: "⚠️ 停課通知",
     notify_insufficientNote: "本堂課因預約人數未達開班人數（{min} 人）而停課，您的堂數已全數退還。",
+    notify_manualCancelNote: "本堂課因教練臨時安排停課，您的堂數已退還，造成不便敬請見諒。",
+    notify_adminCancelTitle: "⚠️ 預約取消通知",
+    notify_adminCancelNote: "教練已為您取消這堂課的預約，堂數已退還。",
+    notify_askUs: "如有疑問，直接在這裡傳訊息給我們即可。",
     notify_coach: "教練",
     notify_cancelNote: "如需取消，請於開課前 3 小時辦理。",
     notify_refundNote: "堂數已退還。",
@@ -416,6 +420,11 @@ const dict = {
     notify_insufficientTitle: "⚠️ Class cancelled",
     notify_insufficientNote:
       "This class has been cancelled because the minimum of {min} participants was not reached. Your credits have been fully refunded.",
+    notify_manualCancelNote:
+      "This class has been cancelled by the coach. Your credit has been refunded. Sorry for the inconvenience.",
+    notify_adminCancelTitle: "⚠️ Booking cancelled",
+    notify_adminCancelNote: "The coach has cancelled your booking for this class. Your credit has been refunded.",
+    notify_askUs: "If you have any questions, just send us a message here.",
     notify_coach: "Coach",
     notify_cancelNote: "Cancellations must be made at least 3 hours before class.",
     notify_refundNote: "Your credit has been refunded.",

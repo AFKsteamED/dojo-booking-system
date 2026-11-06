@@ -95,6 +95,7 @@ src/
     line-push.ts            pushText（失敗不拋錯）
     notify.ts               推播訊息的課程資訊區塊
     notify-targets.ts       通知對象解析（代訂成員 → 帳號持有人）
+    notify-cancel.ts        後台手動停課／強制取消的 LINE 通知
     booking-errors.ts       DB 錯誤碼 → 多語訊息
     profile.ts              性別、關係選項與驗證
     mask.ts                 名單姓名遮罩
@@ -180,6 +181,8 @@ erDiagram
 | `book_session(member, session)` | 依序檢查：場次存在 → 未停課 → **未過截止（開課前 3h，台北時間）** → 私人課資格 → 未額滿 → 有可用錢包（類型相符、日期在有效期內、優先扣最早到期）→ 寫入預約並扣 1 堂。錯誤碼：`SESSION_NOT_FOUND / SESSION_CANCELLED / BOOKING_CLOSED / NOT_ELIGIBLE / FULL / NO_CREDITS / ALREADY_BOOKED` |
 | `cancel_booking(member, booking, cutoff=3)` | 會員取消：必須是本人的 `booked` 預約，且在開課前 3h 之前 → 改為 cancelled 並退 1 堂。錯誤碼：`BOOKING_NOT_FOUND / NOT_YOURS / NOT_ACTIVE / TOO_LATE` |
 | `close_session(session)` | 截止處理（可重複呼叫）：已處理或未到截止 → 略過；已開課或人數 ≥ 開班人數 → 只寫入 `closed_at`；人數不足 → 取消所有有效預約、逐筆退堂、場次改為 cancelled（reason `insufficient`），回傳被退堂的會員 id |
+| `admin_cancel_session(session)` | 後台手動停課：取消所有有效預約、逐筆退堂、場次改為 cancelled（reason `manual`），回傳被退堂的會員 id；已停課的場次回傳 `cancelled=false`，不會重複退堂或通知 |
+| `admin_cancel_booking(booking)` | 後台強制取消單筆有效預約並退 1 堂（不受 3h 限制）；已取消的回傳 `cancelled=false` |
 
 ### 5.1 課程狀態（`src/lib/session-status.ts`，前後端共用）
 
@@ -238,8 +241,8 @@ sequenceDiagram
 | `GET /api/admin/sessions/upcoming?days=7` | 今天起 N 天的場次（含有效人數） |
 | `GET /api/admin/sessions/past?offset&limit` | 已開班的過去場次＋出席統計 |
 | `GET /api/admin/sessions/[id]` | 名單（含關係、代訂人、LINE 暱稱） |
-| `POST /api/admin/sessions/[id]/cancel` | 手動停課＋全數退堂（reason `manual`，**不推播**） |
-| `PATCH /api/admin/bookings/[id]` `{action}` | 報到 / 未到 / 強制取消（退堂，**不推播**） |
+| `POST /api/admin/sessions/[id]/cancel` | 手動停課＋全數退堂（`admin_cancel_session`，reason `manual`），推播「⚠️ 停課通知」 |
+| `PATCH /api/admin/bookings/[id]` `{action}` | 報到 / 未到 / 強制取消（`admin_cancel_booking` 退堂，推播「⚠️ 預約取消通知」） |
 | `POST /api/admin/courses` | 新增課程（公開/私人 × 每週/單堂，含 `min_attendance`） |
 | `GET/PATCH/POST/DELETE /api/admin/templates[/id]` | 常態課列表、編輯（套用到未來未處理場次）、停用、私人名單增刪 |
 | `GET /api/admin/members?q` / `GET,PATCH .../[id]` | 會員搜尋、詳細、修改（含鎖定欄位、關係、語言） |
@@ -298,6 +301,7 @@ sequenceDiagram
 | `08_cron_close_sessions.sql` | 開啟 pg_cron／pg_net，每 10 分鐘呼叫 close-sessions |
 | `09_cron_extend_sessions.sql` | `generate_sessions` 改以台北日期為起點；pg_cron 每天台北 03:00 補足未來 8 週場次 |
 | `10_admin_login_lock.sql` | 後台登入防暴力破解：`admin_login_guard`、`admin_login_attempt()`；鎖定警示紀錄 `admin_login_alerts`、`admin_login_record_alert()` |
+| `11_admin_cancel.sql` | 後台手動停課與強制取消改為單一交易：`admin_cancel_session()`、`admin_cancel_booking()` |
 
 - `04_seed.sql` 含開發用的測試會員 `U_dev_mock_0001`；新建正式環境時，教練與課程請改成實際資料。
 - `08_cron_close_sessions.sql` 中的 `<CRON_SECRET>` 執行前要換成與 Vercel 相同的值（repo 內只保留佔位符）。
@@ -339,7 +343,7 @@ select generate_sessions(12);
 
 | 優先 | 項目 |
 |---|---|
-| 中 | 後台手動停課、強制取消預約沒有發 LINE 通知 |
+| 低 | 停用整個常態課時，被取消的未來場次只退堂、沒有發 LINE 通知 |
 | 中 | `reminders` 端點仍接受 `?secret=` 網址參數，應改成和 close-sessions 一樣只收 header |
 | 中 | 後台共用一組密碼，沒有個別帳號，也沒有操作紀錄 |
 | 低 | `credits` 頁與後台會員選擇器有既有的 `react-hooks/set-state-in-effect` lint 錯誤（不影響建置） |

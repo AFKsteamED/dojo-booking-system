@@ -57,7 +57,7 @@ export default function AdminSessionPage({
   useEffect(load, [load]);
 
   async function act(bookingId: string, action: "attended" | "no_show" | "cancel") {
-    if (action === "cancel" && !confirm("強制取消並退還 1 堂？")) return;
+    if (action === "cancel" && !confirm("強制取消並退還 1 堂？\n學員會收到 LINE 取消通知。")) return;
     await adminApi.updateBooking(bookingId, action);
     load();
   }

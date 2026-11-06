@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { guardAdmin } from "@/lib/admin-auth";
+import { extractErrorCode } from "@/lib/booking-errors";
+import { notifyAdminCancel } from "@/lib/notify-cancel";
 
 // 後台調整單筆預約：報到 / 未到 / 強制取消（退堂）
 // body: { action: "attended" | "no_show" | "cancel" }
@@ -24,25 +26,16 @@ export async function PATCH(
   }
 
   if (action === "cancel") {
-    await supa
-      .from("bookings")
-      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
-      .eq("id", id);
-    // 若原本是有效預約，退還 1 堂
-    if (booking.status === "booked" && booking.wallet_id) {
-      const { data: w } = await supa
-        .from("credit_wallets")
-        .select("remaining_credits")
-        .eq("id", booking.wallet_id)
-        .single();
-      if (w) {
-        await supa
-          .from("credit_wallets")
-          .update({ remaining_credits: (w.remaining_credits as number) + 1 })
-          .eq("id", booking.wallet_id);
-      }
+    // 取消並退 1 堂（資料庫單一交易，見 db/11）；已取消過的不會重複退堂
+    const { data, error } = await supa.rpc("admin_cancel_booking", { p_booking_id: id });
+    if (error) return NextResponse.json({ error: extractErrorCode(error.message) }, { status: 500 });
+    const result = data as { cancelled: boolean; member_id?: string; session_id?: string };
+    if (result.cancelled && result.member_id && result.session_id) {
+      const { member_id, session_id } = result;
+      // 回應送出後再以 LINE 通知學員（代管成員通知其帳號持有人）
+      after(() => notifyAdminCancel("booking", session_id, [member_id]));
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, refunded: result.cancelled });
   }
 
   return NextResponse.json({ error: "INVALID_ACTION" }, { status: 400 });
