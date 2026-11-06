@@ -21,7 +21,7 @@ flowchart LR
   end
   subgraph Supabase
     DB[(Postgres<br/>RLS 全拒 + RPC 交易)]
-    PGCRON[pg_cron + pg_net<br/>每 10 分鐘]
+    PGCRON[pg_cron + pg_net<br/>每 10 分鐘截止・每日補場次]
   end
   LIFF --> FE --> API
   API -- 驗證 ID Token --> LOGIN
@@ -39,7 +39,7 @@ flowchart LR
 | 資料庫 | Supabase Postgres（只在伺服器端用 service role 存取；RLS 預設全部拒絕） |
 | 身分 | LINE LIFF 2.29（`@line/liff`）＋ LINE Login ID Token 伺服器端驗證 |
 | 通知 | LINE Messaging API push |
-| 排程 | Vercel Cron（每日一次，Hobby 方案限制）＋ Supabase pg_cron（每 10 分鐘） |
+| 排程 | Vercel Cron（每日一次，Hobby 方案限制）＋ Supabase pg_cron（每 10 分鐘截止檢查、每天補足場次） |
 | 部署 | GitHub `AFKsteamED/dojo-booking-system`，push 到 `main` 後 Vercel 自動部署 |
 | 地區 | Vercel 函式 **sin1（新加坡）**，與 Supabase **ap-southeast-1（新加坡）** 同區（`vercel.json` 的 `regions`）。不要改回其他地區，否則每次查詢資料庫都要跨洋，API 會慢上數倍 |
 
@@ -174,7 +174,7 @@ erDiagram
 
 | 函式 | 行為 |
 |---|---|
-| `generate_sessions(p_weeks=8)` | 為每個 active 範本產生「今天起 N 週」的場次（衝突時略過），並帶入人數上限、可見性、開班人數。**只在後台新增或修改常態課時觸發** |
+| `generate_sessions(p_weeks=8)` | 為每個 active 範本產生「台北今天起 N 週」的場次（已存在則略過，包含已停課的），並帶入人數上限、可見性、開班人數。**每天台北 03:00 由 pg_cron 執行**，後台新增或修改常態課時也會立即執行 |
 | `book_session(member, session)` | 依序檢查：場次存在 → 未停課 → **未過截止（開課前 3h，台北時間）** → 私人課資格 → 未額滿 → 有可用錢包（類型相符、日期在有效期內、優先扣最早到期）→ 寫入預約並扣 1 堂。錯誤碼：`SESSION_NOT_FOUND / SESSION_CANCELLED / BOOKING_CLOSED / NOT_ELIGIBLE / FULL / NO_CREDITS / ALREADY_BOOKED` |
 | `cancel_booking(member, booking, cutoff=3)` | 會員取消：必須是本人的 `booked` 預約，且在開課前 3h 之前 → 改為 cancelled 並退 1 堂。錯誤碼：`BOOKING_NOT_FOUND / NOT_YOURS / NOT_ACTIVE / TOO_LATE` |
 | `close_session(session)` | 截止處理（可重複呼叫）：已處理或未到截止 → 略過；已開課或人數 ≥ 開班人數 → 只寫入 `closed_at`；人數不足 → 取消所有有效預約、逐筆退堂、場次改為 cancelled（reason `insufficient`），回傳被退堂的會員 id |
@@ -250,6 +250,7 @@ sequenceDiagram
 |---|---|---|
 | `GET /api/cron/reminders` | Vercel Cron `0 12 * * *`（UTC，等於台北 20:00） | 推播隔天課程提醒 |
 | `GET /api/cron/close-sessions` | Supabase pg_cron `*/10 * * * *`（`db/08`） | 截止處理、自動停課與通知 |
+| （無 API，直接在資料庫執行） | Supabase pg_cron `0 19 * * *`（UTC，等於台北 03:00；`db/09`） | `generate_sessions(8)` 補足未來 8 週場次 |
 
 ---
 
@@ -292,6 +293,7 @@ sequenceDiagram
 | `06_family_i18n.sql` | `locale`、`guardian_id`、註冊欄位、`line_display_name` |
 | `07_attendance_relations.sql` | 關係欄位、`min_attendance`、`cancel_reason`、`closed_at`、`BOOKING_CLOSED`、`close_session()` |
 | `08_cron_close_sessions.sql` | 開啟 pg_cron／pg_net，每 10 分鐘呼叫 close-sessions |
+| `09_cron_extend_sessions.sql` | `generate_sessions` 改以台北日期為起點；pg_cron 每天台北 03:00 補足未來 8 週場次 |
 
 - `04_seed.sql` 含開發用的測試會員 `U_dev_mock_0001`；新建正式環境時，教練與課程請改成實際資料。
 - `08_cron_close_sessions.sql` 中的 `<CRON_SECRET>` 執行前要換成與 Vercel 相同的值（repo 內只保留佔位符）。
@@ -333,7 +335,6 @@ select generate_sessions(12);
 
 | 優先 | 項目 |
 |---|---|
-| 高 | **場次不會自動延展**：只有後台新增或修改常態課時才會產生 8 週場次，目前排到 2026-11-27～12-02。建議讓每日排程呼叫 `generate_sessions(8)`（可重複執行，不會重複產生） |
 | 中 | 後台手動停課、強制取消預約沒有發 LINE 通知 |
 | 中 | `reminders` 端點仍接受 `?secret=` 網址參數，應改成和 close-sessions 一樣只收 header |
 | 中 | 後台共用一組密碼，沒有個別帳號，也沒有操作紀錄 |
